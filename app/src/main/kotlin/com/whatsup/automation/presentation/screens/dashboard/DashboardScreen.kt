@@ -3,6 +3,7 @@ package com.whatsup.automation.presentation.screens.dashboard
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.whatsup.automation.domain.model.ConnectionState
@@ -39,6 +41,9 @@ import com.whatsup.automation.presentation.theme.*
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
+    onNavigateToPairing: () -> Unit = {},
+    onNavigateToRules: () -> Unit = {},
+    onNavigateToLogs: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -49,6 +54,11 @@ fun DashboardScreen(
 
     val haptic = LocalHapticFeedback.current
     val pullToRefreshState = rememberPullToRefreshState()
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        viewModel.refreshDashboard()
+    }
 
     PullToRefreshBox(
         isRefreshing = uiState.isRefreshing,
@@ -75,17 +85,26 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .padding(end = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         Text(
                             text = "Sigma AutoFlow",
                             fontSize = 25.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "محرك أتمتة واتساب الفائق ⚡",
                             fontSize = 12.sp,
-                            color = TextSecondary
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -105,15 +124,31 @@ fun DashboardScreen(
                 }
             }
 
-            // تنبيه فوري عند فقدان إذن الكتابة في جهات الاتصال
-            if (!uiState.isWritePermissionGranted) {
+            // بطاقة الإعداد السريع والبدء (Onboarding Card)
+            val isOnboardingNeeded = (uiState.connectionState !is ConnectionState.Connected) || !uiState.isWritePermissionGranted || uiState.rulesCount == 0
+            if (isOnboardingNeeded) {
                 item {
-                    val permissionLauncher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.RequestMultiplePermissions()
-                    ) { _ ->
-                        viewModel.refreshDashboard()
-                    }
+                    OnboardingCard(
+                        isConnected = uiState.connectionState is ConnectionState.Connected,
+                        hasPermissions = uiState.isWritePermissionGranted,
+                        rulesCount = uiState.rulesCount,
+                        onPairClick = onNavigateToPairing,
+                        onPermissionClick = {
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.WRITE_CONTACTS,
+                                    Manifest.permission.READ_CONTACTS
+                                )
+                            )
+                        },
+                        onRuleClick = onNavigateToRules
+                    )
+                }
+            }
 
+            // تنبيه فوري عند فقدان إذن الكتابة في جهات الاتصال
+            if (!uiState.isWritePermissionGranted && !isOnboardingNeeded) {
+                item {
                     BentoCard(
                         modifier = Modifier.fillMaxWidth(),
                         borderBrush = Brush.linearGradient(listOf(RoseError.copy(alpha = 0.6f), AmberWarning.copy(alpha = 0.4f))),
@@ -212,7 +247,11 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
+                            ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -228,12 +267,14 @@ fun DashboardScreen(
                                             isConnected && isPaused -> "الأتمتة متوقفة مؤقتاً ⏸️"
                                             else -> "المحرك الأساسي متوقف"
                                         },
-                                        fontSize = 16.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
+                                        color = TextPrimary,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
                                 Text(
                                     text = if (isPaused && isConnected) {
                                         "الاتصال محفوظ بأمان — تم كتم الردود والحفظ مؤقتاً 🔒"
@@ -241,7 +282,9 @@ fun DashboardScreen(
                                         "معالجة فورية محلية 100% بدون أي خوادم سحابية 🔒"
                                     },
                                     fontSize = 11.sp,
-                                    color = if (isPaused && isConnected) AmberWarning else TextMuted
+                                    color = if (isPaused && isConnected) AmberWarning else TextMuted,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
 
@@ -268,7 +311,7 @@ fun DashboardScreen(
                         // شريط حالة المحركين (الأساسي + المساعد)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // مؤشر المحرك الأساسي
                             val engineStatusBg = when {
@@ -288,9 +331,9 @@ fun DashboardScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, engineStatusBorder)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
@@ -307,7 +350,7 @@ fun DashboardScreen(
                                     Text(
                                         text = when {
                                             isFullyActive -> "الأساسي: نشط 👑"
-                                            isConnected && isPaused -> "الأساسي: متصل (خامل)"
+                                            isConnected && isPaused -> "الأساسي: متصل"
                                             else -> "الأساسي: بانتظار الربط"
                                         },
                                         fontSize = 11.sp,
@@ -316,7 +359,9 @@ fun DashboardScreen(
                                             isFullyActive -> WhatsAppGreenLight
                                             isConnected && isPaused -> AmberWarning
                                             else -> TextMuted
-                                        }
+                                        },
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -325,13 +370,13 @@ fun DashboardScreen(
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (uiState.isAssistantActive) CyberCyan.copy(alpha = 0.12f) else Color(0x14FFFFFF),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.isAssistantActive) CyberCyan.copy(alpha = 0.35f) else Color(0x20FFFFFF))
+                                color = if (uiState.isAssistantActive) CyberCyan.copy(alpha = 0.12f) else Color(0xFFF8FAFC),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.isAssistantActive) CyberCyan.copy(alpha = 0.35f) else Color(0x2200A884))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
@@ -340,10 +385,12 @@ fun DashboardScreen(
                                             .background(if (uiState.isAssistantActive) CyberCyan else TextMuted)
                                     )
                                     Text(
-                                        text = if (uiState.isAssistantActive) "المساعد: جاهز كدرع 🛡️" else "المساعد: بانتظار التفعيل",
+                                        text = if (uiState.isAssistantActive) "المساعد: جاهز 🛡️" else "المساعد: بانتظار التفعيل",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (uiState.isAssistantActive) CyberCyan else TextMuted
+                                        color = if (uiState.isAssistantActive) CyberCyan else TextMuted,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -405,7 +452,7 @@ fun DashboardScreen(
 
                     StatCard(
                         title = "العمليات الناجحة",
-                        value = uiState.stats.totalProcessed.toString(),
+                        value = uiState.stats.successfulOperations.toString(),
                         icon = Icons.Filled.CheckCircle,
                         accentColor = NeonPurple,
                         modifier = Modifier.weight(1f)
@@ -438,11 +485,25 @@ fun DashboardScreen(
                         )
                     }
 
-                    Text(
-                        text = "${uiState.recentLogs.size} عملية مسجلة",
-                        fontSize = 12.sp,
-                        color = TextSecondary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(
+                            onClick = { viewModel.togglePreviewPrivacy() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isPreviewHidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (uiState.isPreviewHidden) "إظهار المعاينات" else "إخفاء المعاينات",
+                                tint = if (uiState.isPreviewHidden) TextMuted else WhatsAppGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        TextButton(onClick = onNavigateToLogs) {
+                            Text("عرض الكل", fontSize = 12.sp, color = CyberCyan, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 
@@ -450,7 +511,7 @@ fun DashboardScreen(
                 item {
                     BentoCard(
                         modifier = Modifier.fillMaxWidth(),
-                        borderBrush = Brush.linearGradient(listOf(Color(0x20FFFFFF), Color(0x10FFFFFF)))
+                        borderBrush = Brush.linearGradient(listOf(Color(0x2200A884), Color(0x1100A884)))
                     ) {
                         Column(
                             modifier = Modifier
@@ -473,7 +534,7 @@ fun DashboardScreen(
                             Text(
                                 text = "اسحب للأسفل للتحديث الفوري ⚡",
                                 fontSize = 11.sp,
-                                color = CyberCyan
+                                color = WhatsAppGreen
                             )
                         }
                     }
@@ -504,7 +565,7 @@ fun DashboardScreen(
                     BentoCard(
                         modifier = Modifier.fillMaxWidth(),
                         borderBrush = Brush.horizontalGradient(
-                            listOf(actionColor.copy(alpha = 0.35f), Color(0x10FFFFFF))
+                            listOf(actionColor.copy(alpha = 0.35f), Color(0x1500A884))
                         )
                     ) {
                         Row(
@@ -537,23 +598,37 @@ fun DashboardScreen(
                                         text = log.extractedName?.let { "تم حفظ: $it" } ?: log.actionExecuted,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
+                                        color = TextPrimary,
+                                        modifier = Modifier
+                                            .weight(1f, fill = false)
+                                            .padding(end = 6.dp),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
 
+                                    val maskedPhone = if (uiState.isPreviewHidden) {
+                                        if (log.senderPhone.length > 5) log.senderPhone.take(4) + "•••" + log.senderPhone.takeLast(2) else "••••••"
+                                    } else {
+                                        log.senderPhone
+                                    }
+
                                     Text(
-                                        text = log.senderPhone,
+                                        text = maskedPhone,
                                         fontSize = 11.sp,
                                         color = TextMuted,
-                                        fontWeight = FontWeight.Medium
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        style = LocalTextStyle.current.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr)
                                     )
                                 }
 
                                 if (log.messageText.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(3.dp))
+                                    val displayText = if (uiState.isPreviewHidden) "•••••••• (معاينة مخفية 🔒)" else "\"${log.messageText}\""
                                     Text(
-                                        text = "\"${log.messageText}\"",
+                                        text = displayText,
                                         fontSize = 12.sp,
-                                        color = TextSecondary,
+                                        color = if (uiState.isPreviewHidden) TextMuted else TextSecondary,
                                         maxLines = 2
                                     )
                                 }
@@ -563,12 +638,57 @@ fun DashboardScreen(
                 }
             }
 
-            // سجل المحاكاة المباشر (Terminal Console)
+            // سجل المحاكاة المباشر (Terminal Console — مطوي افتراضياً)
             item {
-                TerminalConsole(
-                    lines = uiState.terminalLines,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                BentoCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    borderBrush = ObsidianGlowBorder.Cyan
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.toggleTerminalExpanded() }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Terminal,
+                                    contentDescription = null,
+                                    tint = CyberCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "تشخيص النظام وسجل الطرفية (Terminal)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                            }
+                            Icon(
+                                imageVector = if (uiState.isTerminalExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        AnimatedVisibility(visible = uiState.isTerminalExpanded) {
+                            Column(modifier = Modifier.padding(top = 10.dp)) {
+                                TerminalConsole(
+                                    lines = uiState.terminalLines,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -580,3 +700,174 @@ fun DashboardScreen(
         onClearAll = { viewModel.clearNotifications() }
     )
 }
+
+/**
+ * بطاقة خطوات الإعداد السريع والبدء عند أول تشغيل أو عند نقص المتطلبات.
+ */
+@Composable
+private fun OnboardingCard(
+    isConnected: Boolean,
+    hasPermissions: Boolean,
+    rulesCount: Int,
+    onPairClick: () -> Unit,
+    onPermissionClick: () -> Unit,
+    onRuleClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BentoCard(
+        modifier = modifier.fillMaxWidth(),
+        borderBrush = ObsidianGlowBorder.Cyan
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(CyberCyan.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.RocketLaunch,
+                        contentDescription = null,
+                        tint = CyberCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "ابدأ هنا — خطوات الإعداد السريع 🚀",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "أكمل الخطوات التالية لبدء الأتمتة المحلية بأعلى كفاءة",
+                        fontSize = 11.5.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            // خطوة 1: ربط الجلسة
+            OnboardingStepRow(
+                stepNumber = "1",
+                title = "ربط حساب واتساب",
+                subtitle = if (isConnected) "الجلسة مربوطة بنجاح ✅" else "مطلوب لفك تشفير الوسائط والأتمتة",
+                isCompleted = isConnected,
+                actionLabel = "ربط الآن 🔗",
+                onAction = onPairClick
+            )
+
+            // خطوة 2: الصلاحيات
+            OnboardingStepRow(
+                stepNumber = "2",
+                title = "صلاحيات جهات الاتصال",
+                subtitle = if (hasPermissions) "الصلاحيات ممنوحة بالكامل ✅" else "مطلوبة لحفظ جهات الاتصال آلياً",
+                isCompleted = hasPermissions,
+                actionLabel = "منح الصلاحية 🛡️",
+                onAction = onPermissionClick
+            )
+
+            // خطوة 3: أول قاعدة
+            OnboardingStepRow(
+                stepNumber = "3",
+                title = "قواعد الرد والتسجيل",
+                subtitle = if (rulesCount > 0) "يوجد $rulesCount قواعد أتمتة نشطة ✅" else "أضف قاعدتك الأولى لتحديد كيفية الرد",
+                isCompleted = rulesCount > 0,
+                actionLabel = "إضافة قاعدة ➕",
+                onAction = onRuleClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun OnboardingStepRow(
+    stepNumber: String,
+    title: String,
+    subtitle: String,
+    isCompleted: Boolean,
+    actionLabel: String,
+    onAction: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isCompleted) WhatsAppGreen.copy(alpha = 0.08f) else Color(0xFFF8FAFC))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(if (isCompleted) WhatsAppGreen else Color(0xFF94A3B8)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCompleted) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    Text(
+                        text = stepNumber,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = if (isCompleted) WhatsAppGreen else TextSecondary
+                )
+            }
+        }
+
+        if (!isCompleted) {
+            Button(
+                onClick = onAction,
+                colors = ButtonDefaults.buttonColors(containerColor = CyberCyan),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = actionLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A)
+                )
+            }
+        }
+    }
+}
+

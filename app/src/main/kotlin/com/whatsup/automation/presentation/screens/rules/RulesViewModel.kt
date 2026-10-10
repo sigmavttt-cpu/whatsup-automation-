@@ -16,13 +16,17 @@ data class RulesUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val editingRule: Rule? = null,
-    val formattingSettings: com.whatsup.automation.domain.model.ContactFormattingSettings = com.whatsup.automation.domain.model.ContactFormattingSettings()
+    val formattingSettings: com.whatsup.automation.domain.model.ContactFormattingSettings = com.whatsup.automation.domain.model.ContactFormattingSettings(),
+    val showSimulationDialog: Boolean = false,
+    val simulationResult: com.whatsup.automation.domain.usecase.SimulationResult? = null,
+    val isSimulating: Boolean = false
 )
 
 @HiltViewModel
 class RulesViewModel @Inject constructor(
     private val ruleRepository: RuleRepository,
-    private val contactFormattingRepository: com.whatsup.automation.domain.repository.ContactFormattingRepository
+    private val contactFormattingRepository: com.whatsup.automation.domain.repository.ContactFormattingRepository,
+    private val simulateRuleExecutionUseCase: com.whatsup.automation.domain.usecase.SimulateRuleExecutionUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RulesUiState())
@@ -171,5 +175,21 @@ class RulesViewModel @Inject constructor(
                 _uiState.update { it.copy(editingRule = null) }
             } catch (_: Exception) {}
         }
+    }
+
+    fun setSimulationDialogVisible(visible: Boolean) {
+        _uiState.update { it.copy(showSimulationDialog = visible, simulationResult = if (!visible) null else it.simulationResult) }
+    }
+
+    fun runSimulation(testMessage: String, testPhone: String = "+967770000000") {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSimulating = true) }
+            val result = simulateRuleExecutionUseCase.execute(testMessage, testPhone)
+            _uiState.update { it.copy(isSimulating = false, simulationResult = result) }
+        }
+    }
+
+    fun clearSimulationResult() {
+        _uiState.update { it.copy(simulationResult = null) }
     }
 }

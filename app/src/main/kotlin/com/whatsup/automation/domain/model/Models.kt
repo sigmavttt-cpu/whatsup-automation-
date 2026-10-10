@@ -108,7 +108,8 @@ data class DashboardStats(
     val totalSavedContacts: Int = 0,
     val totalRepliesSent: Int = 0,
     val totalIgnored: Int = 0,
-    val totalNoMatch: Int = totalIgnored
+    val totalNoMatch: Int = totalIgnored,
+    val successfulOperations: Int = totalSavedContacts + totalRepliesSent
 )
 
 /**
@@ -130,7 +131,11 @@ data class StatusStory(
     val isLid: Boolean = false,
     val realPhone: String? = null,
     val lid: String? = null,
-    val participant: String? = null
+    val participant: String? = null,
+    val isFavorite: Boolean = false,
+    val isMuted: Boolean = false,
+    val isDeleted: Boolean = false,
+    val deletedAt: Instant? = null
 )
 
 /**
@@ -149,7 +154,9 @@ data class StatusAutomationSettings(
     val autoViewEnabled: Boolean = true,
     val autoReactEnabled: Boolean = true,
     val defaultEmoji: String = "💚",
-    val autoDownloadMedia: Boolean = false
+    val autoDownloadMedia: Boolean = false,
+    val mutedSenders: Set<String> = emptySet(),
+    val favoriteSenders: Set<String> = emptySet()
 )
 
 /**
@@ -216,7 +223,9 @@ data class ContactFormattingSettings(
     val customTag: String = "",
     val customEmoji: String = "",
     val triggerKeywords: String = "سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي",
-    val replyMessage: String = "تم حفظك باسم {name} بنجاح ✅"
+    val replyMessage: String = "تم حفظك باسم {name} بنجاح ✅",
+    val replyAlreadyRegisteredMessage: String = "أهلاً بك! أنت مسجل مسبقاً لدينا باسم {name} 🌟",
+    val replyIfAlreadyRegistered: Boolean = false
 ) {
     /**
      * تشكيل وتنسيق الاسم ليتم حفظه في دفتر جهات اتصال الهاتف الفعلي (ContactsContract).
@@ -256,26 +265,35 @@ data class AntiBanSettings(
     val windowMinutes: Int = 10
 ) {
     /**
-     * حساب التأخير البشري المطلوب لمحاكاة كتابة النص بناءً على طوله.
+     * حساب التأخير البشري الذكي لمحاكاة كتابة النص:
+     * - توزيع جاوسي طبيعي (Gaussian Jitter) لمنع بصمة الكشف الآلي
+     * - وقفات استيعاب تفاعلية للنصوص الطويلة
+     * - مراعاة التوقيت البيولوجي (أبطأ في ساعات الليل المتأخرة)
      */
     fun calculateTypingDelayMs(text: String): Long {
         if (!isEnabled) return 0L
         val baseDelay = if (dynamicTypingSpeed) {
-            val length = text.length.coerceIn(5, 400)
-            (length * typingSpeedCharMs).coerceIn(1200L, 7000L)
+            val length = text.length.coerceIn(5, 500)
+            val thinkingPauses = (length / 60) * 450L
+            (length * typingSpeedCharMs + thinkingPauses).coerceIn(1200L, 8500L)
         } else {
             1500L
         }
-        val jitter = (Math.random() * 800).toLong()
-        return baseDelay + jitter
+        val gaussianRandom = java.util.Random().nextGaussian()
+        val jitter = (gaussianRandom * 350.0).toLong().coerceIn(-400L, 900L)
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val circadianMultiplier = if (hour in 1..5) 1.25 else 1.0
+        return ((baseDelay + jitter) * circadianMultiplier).toLong().coerceAtLeast(800L)
     }
 
     /**
-     * حساب وقت استيعاب وقراءة الرسالة قبل البدء بالكتابة.
+     * حساب وقت استيعاب وقراءة الرسالة قبل البدء بالكتابة بتوزيع جاوسي
      */
     fun calculateReadDelayMs(): Long {
         if (!isEnabled || !simulateReading) return 0L
-        val diff = (readDelayMaxMs - readDelayMinMs).coerceAtLeast(100L)
-        return readDelayMinMs + (Math.random() * diff).toLong()
+        val mean = (readDelayMinMs + readDelayMaxMs) / 2.0
+        val stdDev = (readDelayMaxMs - readDelayMinMs) / 4.0
+        val gaussianJitter = (java.util.Random().nextGaussian() * stdDev).toLong()
+        return (mean + gaussianJitter).toLong().coerceIn(readDelayMinMs, readDelayMaxMs + 1000L)
     }
 }

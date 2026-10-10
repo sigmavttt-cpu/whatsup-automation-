@@ -14,8 +14,8 @@ android {
         applicationId = "com.sigmacodex.whatsup"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "8.1.0"
+        versionCode = 11
+        versionName = "8.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -38,14 +38,20 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = rootProject.file("release.keystore")
-            storePassword = "whatsup123456"
-            keyAlias = "whatsup"
-            keyPassword = "whatsup123456"
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
-            enableV4Signing = false
+            val keystoreFile = rootProject.file("release.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = providers.gradleProperty("KEYSTORE_PASSWORD").orNull
+                    ?: System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = providers.gradleProperty("KEY_ALIAS").orNull
+                    ?: System.getenv("KEY_ALIAS") ?: "whatsup"
+                keyPassword = providers.gradleProperty("KEY_PASSWORD").orNull
+                    ?: System.getenv("KEY_PASSWORD") ?: ""
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
         }
     }
 
@@ -83,6 +89,10 @@ android {
         compose = true
     }
 
+    androidResources {
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!node_modules:!dist:!build_bundle.cjs:!package.json:!package-lock.json:!test_*.js"
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -101,8 +111,8 @@ android {
         }
     }
 
-    androidResources {
-        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!node_modules:!dist:test_*:*test*:package-lock.json"
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -149,6 +159,7 @@ dependencies {
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.mockito:mockito-core:5.12.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")

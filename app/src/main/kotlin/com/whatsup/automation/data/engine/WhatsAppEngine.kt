@@ -6,6 +6,8 @@ import com.whatsup.automation.domain.model.ConnectionState
 import com.whatsup.automation.domain.model.IncomingMessage
 import com.whatsup.automation.domain.model.StatusStory
 import com.whatsup.automation.domain.model.StatusMediaType
+import com.whatsup.automation.domain.model.VaultItem
+import com.whatsup.automation.domain.model.VaultMediaType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +41,9 @@ class WhatsAppEngine @Inject constructor(
     private val sessionKeystore: SessionKeystore,
     private val baileysBridgeManager: BaileysBridgeManager,
     private val logRepository: LogRepository,
-    private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager
+    private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager,
+    private val outboxDao: com.whatsup.automation.data.local.dao.OutboxDao,
+    private val vaultRepository: com.whatsup.automation.domain.repository.VaultRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -107,6 +111,8 @@ class WhatsAppEngine @Inject constructor(
                 handleRawEngineEvent(rawLine)
             }
         }
+        // تفعيل طابور الإرسال التلقائي في الخلفية (Outbox Drainer)
+        startOutboxDrainer()
     }
 
     private val handledMessageTimestamps = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -309,6 +315,12 @@ class WhatsAppEngine @Inject constructor(
      * تنظيف ومعالجة حالة الخروج محلياً دون إعادة إرسال أمر LOGOUT للمحرك لتفادي الحلقات التكرارية.
      */
     private fun handleSessionLoggedOut() {
+        try {
+            val authDir = java.io.File(context.filesDir, "baileys_auth")
+            if (authDir.exists()) {
+                authDir.deleteRecursively()
+            }
+        } catch (_: Exception) {}
         baileysBridgeManager.clearAuthState()
         sessionKeystore.clearSession()
         _connectionState.value = ConnectionState.Disconnected
@@ -327,14 +339,21 @@ class WhatsAppEngine @Inject constructor(
         messageId: String? = null,
         readDelayMs: Long? = null
     ): Boolean {
-        // لا نمنع الإرسال بناءً على حالة الاتصال المحلية فقط — الجسر يتعامل مع الانتظار داخلياً
         val cleanPhone = recipientPhone.filter { it.isDigit() }
         if (cleanPhone.length < 7) {
             logDiagnosticEvent("SEND", "Invalid phone number: $recipientPhone")
             return false
         }
+
+        // إذا كان مقبس Baileys غير جاهز أو غير متصل، حفظ الرسالة مباشرة في طابور Outbox أوفلاين
+        if (!baileysBridgeManager.isBridgeReady.value) {
+            enqueueOutboxMessage(cleanPhone, messageText)
+            logDiagnosticEvent("OUTBOX", "المقبس غير متصل — تم حفظ الرسالة في طابور الإرسال أوفلاين إلى $cleanPhone")
+            return true
+        }
+
         logDiagnosticEvent("SEND", "Sending message to $cleanPhone (${messageText.take(20)}...) [TypingDelay: ${typingDelayMs ?: "default"}ms, MarkRead: $markRead]")
-        return baileysBridgeManager.sendMessage(
+        val sent = baileysBridgeManager.sendMessage(
             recipient = cleanPhone,
             text = messageText,
             typingDelayMs = typingDelayMs,
@@ -342,6 +361,70 @@ class WhatsAppEngine @Inject constructor(
             messageId = messageId,
             readDelayMs = readDelayMs
         )
+        if (!sent) {
+            enqueueOutboxMessage(cleanPhone, messageText)
+            logDiagnosticEvent("OUTBOX", "فشل الإرسال المباشر — تم وضع الرسالة في طابور الإرسال لإعادة المحاولة.")
+        }
+        return sent
+    }
+
+    /**
+     * إدراج رسالة في طابور الإرسال المجدول أوفلاين.
+     */
+    suspend fun enqueueOutboxMessage(recipient: String, messageText: String, mediaUri: String? = null): Long {
+        return outboxDao.insertMessage(
+            com.whatsup.automation.data.local.entity.OutboxMessageEntity(
+                recipient = recipient,
+                messageText = messageText,
+                mediaUri = mediaUri,
+                status = "PENDING",
+                nextRetryTimestamp = System.currentTimeMillis()
+            )
+        )
+    }
+
+    /**
+     * تشغيل خيط معالجة طابور الإرسال أوفلاين دورياً عند اتصال المقبس.
+     */
+    private fun startOutboxDrainer() {
+        scope.launch(Dispatchers.IO) {
+            while (true) {
+                try {
+                    delay(15_000L)
+                    if (baileysBridgeManager.isBridgeReady.value && _connectionState.value is ConnectionState.Connected) {
+                        val pending = outboxDao.getPendingMessages(System.currentTimeMillis(), limit = 3)
+                        for (msg in pending) {
+                            logDiagnosticEvent("OUTBOX", "محاولة إرسال رسالة من الطابور إلى ${msg.recipient}...")
+                            val success = baileysBridgeManager.sendMessage(
+                                recipient = msg.recipient,
+                                text = msg.messageText
+                            )
+                            if (success) {
+                                outboxDao.markSent(msg.id)
+                                logDiagnosticEvent("OUTBOX", "✅ تم إرسال الرسالة المعلقة رقم ${msg.id} بنجاح.")
+                            } else {
+                                val nextRetry = msg.retryCount + 1
+                                if (nextRetry >= 5) {
+                                    outboxDao.markFailed(msg.id, "تجاوزت الحد الأقصى للمحاولات (5)")
+                                    logDiagnosticEvent("OUTBOX", "❌ فشلت الرسالة رقم ${msg.id} نهائياً.")
+                                } else {
+                                    val backoffMs = (5000L * (1 shl nextRetry))
+                                    outboxDao.updateMessage(
+                                        msg.copy(
+                                            retryCount = nextRetry,
+                                            nextRetryTimestamp = System.currentTimeMillis() + backoffMs,
+                                            lastError = "فشل الإرسال المؤقت"
+                                        )
+                                    )
+                                    logDiagnosticEvent("OUTBOX", "تأجيل الرسالة رقم ${msg.id} للمحاولة رقم $nextRetry بعد ${backoffMs / 1000} ثانية.")
+                                }
+                            }
+                            delay(2500L)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     /**
@@ -438,10 +521,24 @@ class WhatsAppEngine @Inject constructor(
                 "BRIDGE_READY" -> {
                     val authDir = java.io.File(context.filesDir, "baileys_auth")
                     val credsFile = java.io.File(authDir, "creds.json")
-                    if (credsFile.exists() && credsFile.length() > 50) {
-                        sessionKeystore.setSessionActive(true)
+                    if (credsFile.exists() && credsFile.length() > 50 && sessionKeystore.isSessionActive()) {
+                        logDiagnosticEvent("BRIDGE", "Local auth creds detected. Awaiting socket verification...")
+                    } else {
+                        sessionKeystore.clearSession()
+                        logDiagnosticEvent("BRIDGE", "Clean install or inactive session. Awaiting pairing...")
                     }
-                    logDiagnosticEvent("BRIDGE", "Baileys local bridge running. Awaiting socket connection...")
+                }
+                "LOGGED_OUT" -> {
+                    val reason = data.optString("reason", "تم تسجيل الخروج من الأجهزة المرتبطة في تطبيق واتساب")
+                    logDiagnosticEvent("LOGOUT", "Session terminated by WhatsApp: $reason")
+                    handleSessionLoggedOut()
+                    _connectionState.value = ConnectionState.Error(reason)
+                    com.whatsup.automation.data.service.SystemNotificationHelper.sendSystemNotification(
+                        context,
+                        "تنبيه انقطاع الجلسة ⚠️",
+                        reason,
+                        isError = true
+                    )
                 }
                 "QR_CODE" -> {
                     val qr = data.optString("qr")
@@ -521,6 +618,20 @@ class WhatsAppEngine @Inject constructor(
                             lid = lid
                         )
                         _incomingMessages.emit(message)
+                        scope.launch {
+                            vaultRepository.saveVaultItem(
+                                VaultItem(
+                                    id = id,
+                                    senderPhone = effectivePhone,
+                                    senderName = senderName,
+                                    mediaType = VaultMediaType.TEXT,
+                                    isViewOnce = false,
+                                    isDeleted = false,
+                                    originalText = text,
+                                    timestamp = ts
+                                )
+                            )
+                        }
                     }
                 }
                 "INCOMING_STATUS", "STATUS_RECEIVED" -> {
@@ -567,10 +678,6 @@ class WhatsAppEngine @Inject constructor(
                         participant = participant
                     )
                     _incomingStatuses.emit(story)
-                }
-                "LOGGED_OUT" -> {
-                    logDiagnosticEvent("SESSION", "Logged out from WhatsApp")
-                    handleSessionLoggedOut()
                 }
                 "ERROR", "FATAL_ERROR" -> {
                     val errorMsg = data.optString("error", "حدث خطأ في محرك واتساب")
@@ -653,6 +760,45 @@ class WhatsAppEngine @Inject constructor(
                     if (phone.isNotEmpty() && name.isNotEmpty()) {
                         deviceContactsManager.updateSingleWhatsAppContact(phone, name)
                         logDiagnosticEvent("CONTACTS", "تحديث اسم جهة اتصال واتساب: $name ($phone)")
+                    }
+                }
+                "VAULT_MEDIA_CAPTURED" -> {
+                    val id = data.optString("id")
+                    val senderPhone = data.optString("senderPhone", "")
+                    val senderName = data.optString("senderName", "")
+                    val mediaTypeStr = data.optString("mediaType", "IMAGE")
+                    val isViewOnce = data.optBoolean("isViewOnce", true)
+                    val originalText = data.optString("originalText")
+                    val localFilePath = data.optString("localFilePath")
+                    val mimeType = data.optString("mimeType")
+                    val fileSizeBytes = data.optLong("fileSizeBytes", 0L)
+                    val ts = data.optLong("timestamp", System.currentTimeMillis())
+
+                    scope.launch {
+                        vaultRepository.saveVaultItem(
+                            VaultItem(
+                                id = id,
+                                senderPhone = senderPhone,
+                                senderName = senderName,
+                                mediaType = VaultMediaType.fromString(mediaTypeStr),
+                                isViewOnce = isViewOnce,
+                                isDeleted = false,
+                                originalText = originalText,
+                                localFilePath = localFilePath,
+                                mimeType = mimeType,
+                                fileSizeBytes = fileSizeBytes,
+                                timestamp = ts
+                            )
+                        )
+                        logDiagnosticEvent("VAULT", "🔒 تم التقاط وسائط عرض لمرة واحدة من $senderPhone بنجاح.")
+                    }
+                }
+                "MESSAGE_REVOKED" -> {
+                    val revokedId = data.optString("id")
+                    val senderPhone = data.optString("senderPhone", "")
+                    scope.launch {
+                        vaultRepository.markMessageAsDeleted(revokedId)
+                        logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة وحفظها في الخزينة: $revokedId ($senderPhone)")
                     }
                 }
             }

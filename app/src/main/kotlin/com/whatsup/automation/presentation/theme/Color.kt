@@ -3,50 +3,52 @@ package com.whatsup.automation.presentation.theme
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-// لوحة ألوان واتساب أوتوميشن المتقدمة — الجيل الثاني (Obsidian Emerald & Cyber Luxury 2.0)
-val WhatsAppGreen = Color(0xFF10B981) // زمردي ناصع
-val WhatsAppGreenLight = Color(0xFF34D399)
-val WhatsAppGreenDark = Color(0xFF059669)
+// لوحة ألوان واتساب أوتوميشن العصرية — أبيض ناصع مع خطوط ولمسات زمردية (Emerald White & Mint Luxury)
+val WhatsAppGreen = Color(0xFF00A884) // زمردي واتساب الأصلي المعتمد
+val WhatsAppGreenLight = Color(0xFF25D366) // أخضر واتساب الناصع
+val WhatsAppGreenDark = Color(0xFF075E54) // أخضر داكن فخم
 val WhatsAppTeal = Color(0xFF0D9488)
 val WhatsAppDarkTeal = Color(0xFF042F2E)
-val WhatsAppNeon = Color(0xFF00E676) // نيون واتساب فاقع
+val WhatsAppNeon = Color(0xFF00C853)
 
-val CyberCyan = Color(0xFF00F2FE)
-val CyanGlow = Color(0xFF38BDF8)
-val ElectricBlue = Color(0xFF3B82F6)
-val NeonPurple = Color(0xFF8B5CF6)
-val VioletNebula = Color(0xFFA855F7)
-val AmberWarning = Color(0xFFF59E0B)
-val RoseError = Color(0xFFF43F5E)
-val CoralError = Color(0xFFFB7185)
+val CyberCyan = Color(0xFF0284C7)
+val CyanGlow = Color(0xFF0EA5E9)
+val ElectricBlue = Color(0xFF2563EB)
+val NeonPurple = Color(0xFF7C3AED)
+val VioletNebula = Color(0xFF9333EA)
+val AmberWarning = Color(0xFFD97706)
+val RoseError = Color(0xFFE11D48)
+val CoralError = Color(0xFFF43F5E)
 
-// خلفيات أوبسيديان العميقة الفاخرة (Deep Obsidian & Glass)
-val DarkBgPrimary = Color(0xFF060911) // أسود كحلي أوبسيديان عميق
-val DarkBgSecondary = Color(0xFF0B111E)
-val DarkBgTertiary = Color(0xFF0F172A)
-val DarkSurface = Color(0xFF131C2E)
-val DarkSurfaceHover = Color(0xFF1E293B)
-val DarkSurfaceElevated = Color(0xFF1A2438)
+// خلفيات بيضاء نقية وعصرية (Crisp White & Light Surfaces)
+val DarkBgPrimary = Color(0xFFF8FAFC) // أبيض عاجي ناعم ومريح للعين
+val DarkBgSecondary = Color(0xFFF1F5F9)
+val DarkBgTertiary = Color(0xFFE2E8F0)
+val DarkSurface = Color(0xFFFFFFFF) // بطاقات بيضاء ناصعة
+val DarkBgCard = DarkSurface
+val DarkSurfaceHover = Color(0xFFF8FAFC)
+val DarkSurfaceElevated = Color(0xFFFFFFFF)
 
-// زجاج وأغشية (Next-Gen Glassmorphism)
-val GlassFill = Color(0x18FFFFFF)
-val GlassBorder = Color(0x2EFFFFFF)
-val GlassFillSubtle = Color(0x0CFFFFFF)
-val GlassBorderHighlight = Color(0x4D10B981)
+// زجاج وأغشية بخطوط زمردية خضراء أنيقة
+val GlassFill = Color(0x0A00A884)
+val GlassBorder = Color(0x3300A884) // خطوط خضراء واضحة وأنيقة
+val GlassBorderSubtle = Color(0x1F00A884)
+val GlassFillSubtle = Color(0x0500A884)
+val GlassBorderHighlight = Color(0x8000A884)
 
-// نصوص عالية التباين
-val TextPrimary = Color(0xFFF8FAFC)
-val TextSecondary = Color(0xFF94A3B8)
+// نصوص عالية التباين والوضوح على الخلفيات البيضاء
+val TextPrimary = Color(0xFF0F172A) // أسود كحلي عميق وواضح جداً
+val TextSecondary = Color(0xFF475569) // رمادي أردوازي أنيق
 val TextMuted = Color(0xFF64748B)
-val TextHint = Color(0xFF475569)
+val TextHint = Color(0xFF94A3B8)
 
-// تدرجات لونية سائلة ومضيئة (Liquid Gradients)
+// تدرجات لونية زمردية وبيضاء
 val EmeraldGradient = Brush.horizontalGradient(
-    colors = listOf(WhatsAppNeon, CyberCyan)
+    colors = listOf(WhatsAppGreen, WhatsAppGreenLight)
 )
 
 val LiquidEmeraldGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF059669), Color(0xFF10B981), Color(0xFF00F2FE))
+    colors = listOf(Color(0xFF075E54), Color(0xFF00A884), Color(0xFF25D366))
 )
 
 val NeonPurpleGradient = Brush.linearGradient(
@@ -54,18 +56,18 @@ val NeonPurpleGradient = Brush.linearGradient(
 )
 
 val BackgroundGradient = Brush.verticalGradient(
-    colors = listOf(DarkBgPrimary, DarkBgSecondary, Color(0xFF03050A))
+    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF8FAFC), Color(0xFFF1F5F9))
 )
 
 val GlassCardGradient = Brush.verticalGradient(
-    colors = listOf(Color(0x28FFFFFF), Color(0x08FFFFFF))
+    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF8FAFC))
 )
 
 object ObsidianGlowBorder {
-    val Emerald: Brush = Brush.linearGradient(listOf(Color(0x4010B981), Color(0x2000F2FE), Color(0x10FFFFFF)))
-    val Cyan: Brush = Brush.linearGradient(listOf(Color(0x4000F2FE), Color(0x2038BDF8), Color(0x10FFFFFF)))
-    val Purple: Brush = Brush.linearGradient(listOf(Color(0x408B5CF6), Color(0x20A855F7), Color(0x10FFFFFF)))
-    val Amber: Brush = Brush.linearGradient(listOf(Color(0x40F59E0B), Color(0x20FBBF24), Color(0x10FFFFFF)))
-    val Rose: Brush = Brush.linearGradient(listOf(Color(0x40F43F5E), Color(0x20FB7185), Color(0x10FFFFFF)))
-    val None: Brush = Brush.linearGradient(listOf(Color(0x18FFFFFF), Color(0x0AFFFFFF)))
+    val Emerald: Brush = Brush.linearGradient(listOf(Color(0x6600A884), Color(0x3325D366), Color(0x1500A884)))
+    val Cyan: Brush = Brush.linearGradient(listOf(Color(0x660284C7), Color(0x330EA5E9), Color(0x150284C7)))
+    val Purple: Brush = Brush.linearGradient(listOf(Color(0x667C3AED), Color(0x339333EA), Color(0x157C3AED)))
+    val Amber: Brush = Brush.linearGradient(listOf(Color(0x66D97706), Color(0x33F59E0B), Color(0x15D97706)))
+    val Rose: Brush = Brush.linearGradient(listOf(Color(0x66E11D48), Color(0x33F43F5E), Color(0x15E11D48)))
+    val None: Brush = Brush.linearGradient(listOf(Color(0x2500A884), Color(0x1000A884)))
 }

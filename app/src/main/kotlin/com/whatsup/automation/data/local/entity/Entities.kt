@@ -70,7 +70,11 @@ data class StatusEntity(
     val isReacted: Boolean = false,
     val reactionEmoji: String? = null,
     val reactionSentAt: Long? = null,
-    val participant: String? = null
+    val participant: String? = null,
+    val isFavorite: Boolean = false,
+    val isMuted: Boolean = false,
+    val isDeleted: Boolean = false,
+    val deletedAt: Long? = null
 )
 
 /**
@@ -119,3 +123,33 @@ data class GroupLogEntity(
     val sentAt: Long? = System.currentTimeMillis(),
     val errorMessage: String? = null
 )
+
+/**
+ * كيان الخزينة السرية (وسائط العرض لمرة واحدة View-Once، الرسائل المحذوفة، والحالات المحفوظة).
+ */
+@Entity(
+    tableName = "vault_media",
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["senderPhone"]),
+        Index(value = ["isViewOnce"]),
+        Index(value = ["isDeleted"]),
+        Index(value = ["isFavorite"])
+    ]
+)
+data class VaultMediaEntity(
+    @PrimaryKey
+    val id: String, // Message Key ID or Unique Item ID
+    val senderPhone: String,
+    val senderName: String,
+    val mediaType: String, // IMAGE, VIDEO, AUDIO, TEXT, DOCUMENT
+    val isViewOnce: Boolean = false,
+    val isDeleted: Boolean = false, // Anti-Delete revoke marker
+    val originalText: String? = null,
+    val localFilePath: String? = null,
+    val mimeType: String? = null,
+    val fileSizeBytes: Long = 0L,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isFavorite: Boolean = false
+)
+

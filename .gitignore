@@ -81,3 +81,4 @@ local.properties
 
 # ─── Docs يُحجب عن الأدوات (موجودة في .docs/) ───────────────
 /.docs/
+/outputs/

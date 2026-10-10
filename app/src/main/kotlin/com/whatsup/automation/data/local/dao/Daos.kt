@@ -7,6 +7,7 @@ import com.whatsup.automation.data.local.entity.GroupMemberEntity
 import com.whatsup.automation.data.local.entity.LogEntity
 import com.whatsup.automation.data.local.entity.RuleEntity
 import com.whatsup.automation.data.local.entity.StatusEntity
+import com.whatsup.automation.data.local.entity.VaultMediaEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -31,6 +32,15 @@ interface RuleDao {
 
     @Query("UPDATE rules SET isEnabled = :enabled WHERE id = :id")
     suspend fun toggleRule(id: Long, enabled: Boolean)
+
+    @Query("SELECT * FROM rules ORDER BY priority ASC")
+    suspend fun getAllRulesList(): List<RuleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRules(rules: List<RuleEntity>)
+
+    @Query("DELETE FROM rules")
+    suspend fun clearAllRules()
 }
 
 @Dao
@@ -64,7 +74,21 @@ interface LogDao {
 
     @Query("DELETE FROM activity_logs WHERE id NOT IN (SELECT id FROM activity_logs ORDER BY timestamp DESC LIMIT :keepCount)")
     suspend fun pruneOldLogs(keepCount: Int = 1000): Int
+
+    @Query("SELECT COUNT(*) FROM activity_logs WHERE extractedName IS NOT NULL AND extractedName != ''")
+    suspend fun getContactsSavedCount(): Int
+
+    @Query("SELECT matchedRule, COUNT(*) as count FROM activity_logs WHERE status = 'SUCCESS' AND matchedRule != '' AND matchedRule != 'درع منع التكرار — حماية LID' GROUP BY matchedRule ORDER BY count DESC LIMIT :limit")
+    suspend fun getTopUsedRules(limit: Int = 5): List<RuleUsageStat>
+
+    @Query("SELECT timestamp FROM activity_logs WHERE timestamp >= :sinceTimestamp")
+    suspend fun getLogTimestampsSince(sinceTimestamp: Long): List<Long>
 }
+
+data class RuleUsageStat(
+    val matchedRule: String,
+    val count: Int
+)
 
 /**
  * DAO لقصص الحالات (Statuses) والتفاعل التلقائي.
@@ -94,6 +118,24 @@ interface StatusDao {
 
     @Query("DELETE FROM statuses WHERE timestamp < :olderThanTimestamp")
     suspend fun deleteExpiredStatuses(olderThanTimestamp: Long)
+
+    @Query("UPDATE statuses SET isFavorite = :isFavorite WHERE id = :statusId")
+    suspend fun updateFavorite(statusId: String, isFavorite: Boolean)
+
+    @Query("UPDATE statuses SET isMuted = :isMuted WHERE id = :statusId")
+    suspend fun updateMuted(statusId: String, isMuted: Boolean)
+
+    @Query("UPDATE statuses SET isFavorite = :isFavorite WHERE senderPhone = :senderPhone")
+    suspend fun updateFavoriteBySender(senderPhone: String, isFavorite: Boolean)
+
+    @Query("UPDATE statuses SET isMuted = :isMuted WHERE senderPhone = :senderPhone")
+    suspend fun updateMutedBySender(senderPhone: String, isMuted: Boolean)
+
+    @Query("UPDATE statuses SET isDeleted = 1, deletedAt = :timestamp WHERE id = :statusId")
+    suspend fun markAsDeleted(statusId: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM statuses WHERE isDeleted = 1 AND deletedAt < :olderThanTimestamp")
+    suspend fun deleteExpiredDeletedStatuses(olderThanTimestamp: Long)
 }
 
 data class GroupWithMemberCount(
@@ -178,3 +220,46 @@ interface GroupLogDao {
     @Query("UPDATE group_logs SET status = :status, sentAt = :sentAt, errorMessage = :errorMessage WHERE id = :id")
     suspend fun updateLogStatus(id: Long, status: String, sentAt: Long?, errorMessage: String?)
 }
+
+/**
+ * DAO للخزينة السرية (وسائط View-Once، الرسائل المحذوفة، والحالات المحفوظة).
+ */
+@Dao
+interface VaultDao {
+    @Query("SELECT * FROM vault_media ORDER BY timestamp DESC")
+    fun getAllVaultItems(): Flow<List<VaultMediaEntity>>
+
+    @Query("SELECT * FROM vault_media WHERE isViewOnce = 1 ORDER BY timestamp DESC")
+    fun getViewOnceItems(): Flow<List<VaultMediaEntity>>
+
+    @Query("SELECT * FROM vault_media WHERE isDeleted = 1 ORDER BY timestamp DESC")
+    fun getDeletedItems(): Flow<List<VaultMediaEntity>>
+
+    @Query("SELECT * FROM vault_media WHERE isFavorite = 1 ORDER BY timestamp DESC")
+    fun getFavoriteItems(): Flow<List<VaultMediaEntity>>
+
+    @Query("SELECT * FROM vault_media WHERE id = :id LIMIT 1")
+    suspend fun getItemById(id: String): VaultMediaEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItem(item: VaultMediaEntity)
+
+    @Update
+    suspend fun updateItem(item: VaultMediaEntity)
+
+    @Query("UPDATE vault_media SET isDeleted = 1 WHERE id = :id")
+    suspend fun markAsDeleted(id: String)
+
+    @Query("UPDATE vault_media SET isFavorite = NOT isFavorite WHERE id = :id")
+    suspend fun toggleFavorite(id: String)
+
+    @Query("DELETE FROM vault_media WHERE id = :id")
+    suspend fun deleteItem(id: String)
+
+    @Query("SELECT COUNT(*) FROM vault_media WHERE isViewOnce = 1")
+    fun getViewOnceCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM vault_media WHERE isDeleted = 1")
+    fun getDeletedCount(): Flow<Int>
+}
+

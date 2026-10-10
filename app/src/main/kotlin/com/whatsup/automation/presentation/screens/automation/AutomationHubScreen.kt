@@ -37,20 +37,22 @@ import com.whatsup.automation.presentation.screens.statuses.StatusesViewModel
 import com.whatsup.automation.presentation.theme.*
 
 enum class AutomationTab(val title: String, val icon: ImageVector) {
-    RULES("القواعد والردود", Icons.Filled.Bolt),
-    STATUSES("أتمتة الحالات", Icons.Filled.AutoStories),
-    GROUPS("المجموعات", Icons.Filled.Groups)
+    RULES("قواعد التسجيل والردود", Icons.Filled.Bolt),
+    GROUPS("المجموعات والإرسال الجماعي", Icons.Filled.Groups)
 }
 
 @Composable
 fun AutomationHubScreen(
     rulesViewModel: RulesViewModel,
-    statusesViewModel: StatusesViewModel,
     groupsViewModel: GroupsViewModel,
+    statusesViewModel: StatusesViewModel? = null,
     initialTab: AutomationTab = AutomationTab.RULES,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(initialTab) }
+    LaunchedEffect(initialTab) {
+        selectedTab = initialTab
+    }
     val haptic = LocalHapticFeedback.current
 
     Column(
@@ -58,7 +60,7 @@ fun AutomationHubScreen(
             .fillMaxSize()
             .background(DarkBgPrimary)
     ) {
-        // شريط التبويبات الفرعية العلوي بتصميم Glassmorphism فخم
+        // شريط التبويبات الفرعية العلوي بتصميم White Emerald Glass فخم
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -68,15 +70,15 @@ fun AutomationHubScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(DarkSurfaceElevated)
-                    .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
+                    .background(Color(0xFFFFFFFF))
+                    .border(1.dp, Color(0x3300A884), RoundedCornerShape(20.dp))
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 AutomationTab.values().forEach { tab ->
                     val isSelected = selectedTab == tab
                     val bgBrush = if (isSelected) {
-                        Brush.horizontalGradient(listOf(WhatsAppGreenDark, WhatsAppGreen))
+                        Brush.horizontalGradient(listOf(WhatsAppGreen, WhatsAppGreenLight))
                     } else {
                         Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                     }
@@ -103,14 +105,14 @@ fun AutomationHubScreen(
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.title,
-                                tint = if (isSelected) Color.White else TextSecondary,
+                                tint = if (isSelected) Color.White else WhatsAppGreenDark,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
                                 text = tab.title,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextSecondary,
+                                color = if (isSelected) Color.White else TextPrimary,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
@@ -131,7 +133,6 @@ fun AutomationHubScreen(
         ) { tab ->
             when (tab) {
                 AutomationTab.RULES -> RulesScreen(viewModel = rulesViewModel)
-                AutomationTab.STATUSES -> StatusesScreen(viewModel = statusesViewModel)
                 AutomationTab.GROUPS -> GroupsScreen(viewModel = groupsViewModel)
             }
         }

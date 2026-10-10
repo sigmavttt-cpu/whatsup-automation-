@@ -17,6 +17,7 @@ import { resolvePhoneAndLid, getLidForPhone, isLidJidOrNumber, getContactName } 
 import { createTrace, recordStage, printTimelineReport } from './tracer.js';
 
 export const statusKeysMap = new Map();
+export const processedStatusIdsCache = new Set();
 
 /**
  * Loads cached status keys from disk.
@@ -58,47 +59,76 @@ export async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH
     if (msg.key.remoteJid !== 'status@broadcast') return;
     if (msg.key.fromMe) return;
 
+    // 1. Strict Filter: Ignore reactions, revocations, and protocol non-status payloads
+    if (msg.message.reactionMessage ||
+        msg.message.protocolMessage ||
+        msg.message.pollUpdateMessage ||
+        msg.message.keepInChatMessage) {
+        return;
+    }
+
+    const hasRealStatusContent = msg.message.conversation ||
+                                 msg.message.extendedTextMessage ||
+                                 msg.message.imageMessage ||
+                                 msg.message.videoMessage ||
+                                 msg.message.audioMessage ||
+                                 msg.message.documentMessage;
+
+    if (!hasRealStatusContent) {
+        return;
+    }
+
     const senderJid = msg.key.participant || msg.key.remoteJid || '';
     const cleanRawPhone = senderJid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
     if (!cleanRawPhone || cleanRawPhone === 'status') return;
 
     const statusId = msg.key.id;
-    if (statusId) {
-        const trace = createTrace(statusId, {
-            participant: msg.key.participant || senderJid,
-            remoteJid: msg.key.remoteJid,
-            pushName: msg.pushName || ''
-        });
+    if (!statusId) return;
 
-        recordStage(statusId, 'STATUS_RECEIVED', 'status-manager.js', 'processStatusMessage', {
-            statusId,
-            remoteJid: msg.key.remoteJid,
-            participant: msg.key.participant || senderJid,
-            fromMe: msg.key.fromMe || false,
-            hasMessage: !!msg.message
-        });
-
-        rawMessagesCache.set(statusId, msg.message);
-        statusKeysMap.set(statusId, {
-            remoteJid: msg.key.remoteJid,
-            id: statusId,
-            participant: msg.key.participant || senderJid,
-            fromMe: msg.key.fromMe || false,
-            pushName: msg.pushName || ''
-        });
-
-        // Retain at most MAX_STATUS_KEYS entries
-        if (statusKeysMap.size > CONFIG.MAX_STATUS_KEYS) {
-            const firstKey = statusKeysMap.keys().next().value;
-            statusKeysMap.delete(firstKey);
-        }
-        saveStatusKeys(authFolder);
-
-        recordStage(statusId, 'STATUS_STORED', 'status-manager.js', 'saveStatusKeys', {
-            statusId,
-            totalStored: statusKeysMap.size
-        });
+    // 2. Deduplication Cache: prevent emitting duplicate events for the same status ID
+    if (processedStatusIdsCache.has(statusId)) {
+        return;
     }
+    processedStatusIdsCache.add(statusId);
+    if (processedStatusIdsCache.size > 1000) {
+        const firstKey = processedStatusIdsCache.values().next().value;
+        processedStatusIdsCache.delete(firstKey);
+    }
+
+    const trace = createTrace(statusId, {
+        participant: msg.key.participant || senderJid,
+        remoteJid: msg.key.remoteJid,
+        pushName: msg.pushName || ''
+    });
+
+    recordStage(statusId, 'STATUS_RECEIVED', 'status-manager.js', 'processStatusMessage', {
+        statusId,
+        remoteJid: msg.key.remoteJid,
+        participant: msg.key.participant || senderJid,
+        fromMe: msg.key.fromMe || false,
+        hasMessage: !!msg.message
+    });
+
+    rawMessagesCache.set(statusId, msg.message);
+    statusKeysMap.set(statusId, {
+        remoteJid: msg.key.remoteJid,
+        id: statusId,
+        participant: msg.key.participant || senderJid,
+        fromMe: msg.key.fromMe || false,
+        pushName: msg.pushName || ''
+    });
+
+    // Retain at most MAX_STATUS_KEYS entries
+    if (statusKeysMap.size > CONFIG.MAX_STATUS_KEYS) {
+        const firstKey = statusKeysMap.keys().next().value;
+        statusKeysMap.delete(firstKey);
+    }
+    saveStatusKeys(authFolder);
+
+    recordStage(statusId, 'STATUS_STORED', 'status-manager.js', 'saveStatusKeys', {
+        statusId,
+        totalStored: statusKeysMap.size
+    });
 
     const resolved = await resolvePhoneAndLid(senderJid, msg, sock);
     const resolvedPhone = resolved.realPhone || resolved.phone;
@@ -197,7 +227,7 @@ export async function viewStatus(sock, statusId, senderPhone = '', participantIn
  *
  * Protocol-correct approach (discovered via Baileys source + WhatsApp protocol analysis):
  * 1. Target MUST be 'status@broadcast' (NOT the participant directly).
- * 2. statusJidList MUST include ONLY the publisher's participant JID AND our own sock.user.id (Strict Single-JID).
+ * 2. statusJidList MUST include ONLY the publisher's single participant JID (Strict Single-JID Routing).
  * 3. The reaction key MUST use the original status message key exactly as received.
  * 4. Read receipts are sent first to register the view alongside the reaction.
  */
@@ -206,18 +236,40 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
 
     try {
         const originalKey = statusKeysMap.get(statusId);
-        const participant = originalKey?.participant || (participantInput && participantInput.includes('@') ? participantInput : null);
-
-        if (!participant) {
+        if (!originalKey && !senderPhone && !participantInput) {
             emitToAndroid('ERROR', { error: `لم يتم العثور على مفتاح الحالة ${statusId} لإرسال التفاعل` });
             return;
         }
+
+        let participant = (participantInput && participantInput.includes('@'))
+            ? participantInput
+            : (originalKey?.participant || null);
+
+        if (!participant && (senderPhone || participantInput)) {
+            const raw = senderPhone || participantInput;
+            const clean = raw.replace(/[^0-9]/g, '');
+            if (clean) {
+                const mappedLid = getLidForPhone(clean);
+                if (mappedLid) {
+                    participant = `${mappedLid}@lid`;
+                } else {
+                    participant = isLidJidOrNumber(clean) ? `${clean}@lid` : `${clean}@s.whatsapp.net`;
+                }
+            }
+        }
+
+        if (!participant) {
+            emitToAndroid('ERROR', { error: `لم يتم العثور على ناشر الحالة ${statusId} لإرسال التفاعل` });
+            return;
+        }
+
+        const normalizedParticipant = jidNormalizedUser(participant);
 
         // Exact original key without altering remoteJid, id, or participant
         const reactionKey = {
             remoteJid: originalKey?.remoteJid || 'status@broadcast',
             id: statusId,
-            participant: participant,
+            participant: normalizedParticipant,
             fromMe: false
         };
 
@@ -229,12 +281,12 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
         };
 
         // Strict Single-JID list: target participant only
-        const statusJidList = [participant];
+        const statusJidList = [normalizedParticipant];
 
         // 1. Send read receipt first
         let receiptSuccess = false;
         try {
-            await sock.sendReceipt('status@broadcast', participant, [statusId], 'read');
+            await sock.sendReceipt('status@broadcast', normalizedParticipant, [statusId], 'read');
             receiptSuccess = true;
         } catch (receiptErr) {
             console.error(`[reactStatus] sendReceipt failed: ${receiptErr?.message || receiptErr}`);
@@ -246,7 +298,7 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
 
         recordStage(statusId, 'REACTION_BUILD', 'status-manager.js', 'reactStatus', {
             statusId,
-            participant,
+            participant: normalizedParticipant,
             reactionKey,
             reactionMsg,
             statusJidList,
@@ -292,10 +344,10 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
             }
         }
 
-        const resolved = await resolvePhoneAndLid(participant || senderPhone, null, sock);
+        const resolved = await resolvePhoneAndLid(normalizedParticipant || senderPhone, null, sock);
         const pushName = originalKey?.pushName || getContactName(resolved.phone) || '';
 
-        console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${participant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}`);
+        console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${normalizedParticipant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}`);
 
         emitToAndroid('STATUS_REACTED', {
             id: statusId,
@@ -303,7 +355,7 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
             realPhone: resolved.realPhone,
             lid: resolved.lid,
             senderName: pushName,
-            participant: participant,
+            participant: normalizedParticipant,
             emoji: emoji || '💚',
             success: !!sendResult,
             receiptSuccess: receiptSuccess

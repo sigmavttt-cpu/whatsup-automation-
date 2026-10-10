@@ -16,7 +16,17 @@ import javax.inject.Inject
 
 enum class StatusSubTab {
     NEW,
-    VIEWED
+    VIEWED,
+    FAVORITES,
+    MUTED,
+    DELETED_TEMP
+}
+
+enum class StatusSortBy {
+    DATE_DESC,
+    DATE_ASC,
+    NAME_ASC,
+    FAVORITES
 }
 
 data class StatusesUiState(
@@ -24,25 +34,57 @@ data class StatusesUiState(
     val settings: StatusAutomationSettings = StatusAutomationSettings(),
     val selectedStatus: StatusStory? = null,
     val selectedSubTab: StatusSubTab = StatusSubTab.NEW,
+    val searchQuery: String = "",
+    val sortBy: StatusSortBy = StatusSortBy.DATE_DESC,
+    val selectedIds: Set<String> = emptySet(),
+    val isMultiSelectMode: Boolean = false,
     val isRefreshing: Boolean = false
 ) {
     val allCount: Int
         get() = statuses.size
     val newCount: Int
-        get() = statuses.count { !it.isViewed && !it.isReacted }
+        get() = statuses.count { !it.isViewed && !it.isReacted && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
     val viewedCount: Int
-        get() = statuses.count { it.isViewed || it.isReacted }
+        get() = statuses.count { (it.isViewed || it.isReacted) && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
+    val favoritesCount: Int
+        get() = statuses.count { (it.isFavorite || settings.favoriteSenders.contains(it.senderPhone)) && !it.isDeleted }
+    val mutedCount: Int
+        get() = statuses.count { (it.isMuted || settings.mutedSenders.contains(it.senderPhone)) && !it.isDeleted }
+    val deletedTempCount: Int
+        get() = statuses.count { it.isDeleted }
     val totalViewedCount: Int
         get() = viewedCount
     val viewedUniquePersonsCount: Int
-        get() = statuses.filter { it.isViewed || it.isReacted }.map { it.senderPhone }.distinct().size
+        get() = statuses.filter { (it.isViewed || it.isReacted) && !it.isDeleted }.map { it.senderPhone }.distinct().size
 
     val displayedStatuses: List<StatusStory>
-        get() = when (selectedSubTab) {
-            StatusSubTab.NEW -> statuses.filter { !it.isViewed && !it.isReacted }
-                .sortedByDescending { it.timestamp.toEpochMilli() }
-            StatusSubTab.VIEWED -> statuses.filter { it.isViewed || it.isReacted }
-                .sortedByDescending { it.viewedAt?.toEpochMilli() ?: it.timestamp.toEpochMilli() }
+        get() {
+            var list = when (selectedSubTab) {
+                StatusSubTab.NEW -> statuses.filter { !it.isViewed && !it.isReacted && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
+                StatusSubTab.VIEWED -> statuses.filter { (it.isViewed || it.isReacted) && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
+                StatusSubTab.FAVORITES -> statuses.filter { (it.isFavorite || settings.favoriteSenders.contains(it.senderPhone)) && !it.isDeleted }
+                StatusSubTab.MUTED -> statuses.filter { (it.isMuted || settings.mutedSenders.contains(it.senderPhone)) && !it.isDeleted }
+                StatusSubTab.DELETED_TEMP -> statuses.filter { it.isDeleted }
+            }
+
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.trim().lowercase()
+                list = list.filter {
+                    it.senderName.lowercase().contains(q) ||
+                    it.senderPhone.contains(q) ||
+                    (it.textContent?.lowercase()?.contains(q) == true)
+                }
+            }
+
+            return when (sortBy) {
+                StatusSortBy.DATE_DESC -> list.sortedByDescending { it.timestamp.toEpochMilli() }
+                StatusSortBy.DATE_ASC -> list.sortedBy { it.timestamp.toEpochMilli() }
+                StatusSortBy.NAME_ASC -> list.sortedBy { it.senderName }
+                StatusSortBy.FAVORITES -> list.sortedWith(
+                    compareByDescending<StatusStory> { it.isFavorite || settings.favoriteSenders.contains(it.senderPhone) }
+                        .thenByDescending { it.timestamp.toEpochMilli() }
+                )
+            }
         }
 }
 @HiltViewModel
@@ -77,9 +119,21 @@ class StatusesViewModel @Inject constructor(
             while (true) {
                 try {
                     statusRepository.deleteExpiredStatuses()
+                    statusRepository.deleteExpiredDeletedStatuses()
                 } catch (_: Exception) {}
                 kotlinx.coroutines.delay(30_000)
                 forceRefreshTrigger.value = System.currentTimeMillis()
+            }
+        }
+    }
+
+    fun excludeSelectedSenders() {
+        val selected = _uiState.value.selectedIds
+        val senders = _uiState.value.statuses.filter { it.id in selected }.map { it.senderPhone }.distinct()
+        if (senders.isNotEmpty()) {
+            viewModelScope.launch {
+                statusRepository.muteMultipleSenders(senders, true)
+                _uiState.update { it.copy(selectedIds = emptySet(), isMultiSelectMode = false) }
             }
         }
     }
@@ -219,18 +273,101 @@ class StatusesViewModel @Inject constructor(
         }
     }
 
-    /**
-     * طلب جلب كل الحالات الموجودة (قديمة وجديدة) من واتساب الآن.
-     * يُستدعى عند الضغط على زر "جلب الحالات" في الواجهة.
-     */
     fun fetchLatestStatuses() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             try {
                 whatsAppEngine.fetchAllStatuses()
             } catch (_: Exception) {}
-            delay(6000L) // انتظر وصول الحالات
+            delay(6000L)
             _uiState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    fun setSortBy(sortBy: StatusSortBy) {
+        _uiState.update { it.copy(sortBy = sortBy) }
+    }
+
+    fun toggleFavorite(status: StatusStory) {
+        viewModelScope.launch {
+            val isFav = !(status.isFavorite || _uiState.value.settings.favoriteSenders.contains(status.senderPhone))
+            statusRepository.toggleFavoriteBySender(status.senderPhone, isFav)
+            statusRepository.toggleFavorite(status.id, isFav)
+            forceRefreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
+    fun toggleMuted(status: StatusStory) {
+        viewModelScope.launch {
+            val isMuted = !(status.isMuted || _uiState.value.settings.mutedSenders.contains(status.senderPhone))
+            statusRepository.toggleMutedBySender(status.senderPhone, isMuted)
+            statusRepository.toggleMuted(status.id, isMuted)
+            forceRefreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
+    fun setMultiSelectMode(enabled: Boolean) {
+        _uiState.update {
+            it.copy(
+                isMultiSelectMode = enabled,
+                selectedIds = if (enabled) it.selectedIds else emptySet()
+            )
+        }
+    }
+
+    fun toggleSelection(statusId: String) {
+        _uiState.update { state ->
+            val updated = if (state.selectedIds.contains(statusId)) {
+                state.selectedIds - statusId
+            } else {
+                state.selectedIds + statusId
+            }
+            state.copy(selectedIds = updated)
+        }
+    }
+
+    fun selectAllDisplayed() {
+        val allIds = _uiState.value.displayedStatuses.map { it.id }.toSet()
+        _uiState.update { it.copy(selectedIds = allIds) }
+    }
+
+    fun clearSelection() {
+        _uiState.update { it.copy(selectedIds = emptySet()) }
+    }
+
+    fun muteSelected() {
+        viewModelScope.launch {
+            val selectedStatuses = _uiState.value.statuses.filter { it.id in _uiState.value.selectedIds }
+            val phones = selectedStatuses.map { it.senderPhone }.distinct()
+            statusRepository.muteMultipleSenders(phones, true)
+            setMultiSelectMode(false)
+            forceRefreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
+    fun unmuteSelected() {
+        viewModelScope.launch {
+            val selectedStatuses = _uiState.value.statuses.filter { it.id in _uiState.value.selectedIds }
+            val phones = selectedStatuses.map { it.senderPhone }.distinct()
+            statusRepository.muteMultipleSenders(phones, false)
+            setMultiSelectMode(false)
+            forceRefreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
+    fun favoriteSelected() {
+        viewModelScope.launch {
+            val selectedStatuses = _uiState.value.statuses.filter { it.id in _uiState.value.selectedIds }
+            for (status in selectedStatuses) {
+                statusRepository.toggleFavoriteBySender(status.senderPhone, true)
+                statusRepository.toggleFavorite(status.id, true)
+            }
+            setMultiSelectMode(false)
+            forceRefreshTrigger.value = System.currentTimeMillis()
         }
     }
 }

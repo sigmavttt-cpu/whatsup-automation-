@@ -85,14 +85,14 @@ fun GlassmorphicCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 20.dp,
     borderBrush: Brush = Brush.linearGradient(
-        colors = listOf(Color(0x33FFFFFF), Color(0x0DFFFFFF))
+        colors = listOf(Color(0x3300A884), Color(0x1000A884))
     ),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
-            .background(DarkSurface.copy(alpha = 0.75f))
+            .background(Color(0xFFFFFFFF))
             .border(1.dp, borderBrush, RoundedCornerShape(cornerRadius))
             .padding(16.dp)
     ) {
@@ -137,26 +137,28 @@ fun LiquidGradientButton(
                     onClick()
                 }
             )
-            .padding(horizontal = 22.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (enabled) DarkBgPrimary else TextMuted,
-                    modifier = Modifier.size(20.dp)
+                    tint = if (enabled) Color.White else TextMuted,
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Text(
                 text = text,
-                color = if (enabled) DarkBgPrimary else TextMuted,
+                color = if (enabled) Color.White else TextMuted,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
+                fontSize = 13.5.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
@@ -199,8 +201,8 @@ fun <T> SegmentedPillSelector(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = DarkBgPrimary.copy(alpha = 0.9f),
-        border = BorderStroke(1.dp, Color(0x22FFFFFF))
+        color = Color(0xFFFFFFFF),
+        border = BorderStroke(1.dp, Color(0x3300A884))
     ) {
         Row(
             modifier = Modifier
@@ -216,7 +218,7 @@ fun <T> SegmentedPillSelector(
                     label = "pillBg"
                 )
                 val textColor by animateColorAsState(
-                    targetValue = if (isSelected) DarkBgPrimary else TextSecondary,
+                    targetValue = if (isSelected) Color.White else TextPrimary,
                     animationSpec = tween(250),
                     label = "pillText"
                 )
@@ -404,35 +406,39 @@ fun StatCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(accentColor.copy(alpha = 0.16f))
-                    .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
+                    .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
                     tint = accentColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
             Text(
                 text = value,
-                fontSize = 24.sp,
+                fontSize = if (value.length > 5) 18.sp else 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
             text = title,
-            fontSize = 12.sp,
+            fontSize = 11.5.sp,
             color = TextSecondary,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
     }
 }
@@ -521,7 +527,8 @@ fun ServiceHealthCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
                     val alpha by infiniteTransition.animateFloat(
@@ -542,18 +549,21 @@ fun ServiceHealthCard(
                             )
                     )
                     Text(
-                        text = "حارس الخدمة ومراقبة الأداء (Watchdog)",
-                        fontSize = 14.sp,
+                        text = "حارس الخدمة ومراقبة الأداء",
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
                 Text(
                     text = if (snapshot.isForegroundServiceRunning) "نشط 24/7" else "متوقف",
-                    fontSize = 12.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (snapshot.isForegroundServiceRunning) WhatsAppGreenLight else RoseError
+                    color = if (snapshot.isForegroundServiceRunning) WhatsAppGreenLight else RoseError,
+                    maxLines = 1
                 )
             }
 
@@ -561,40 +571,70 @@ fun ServiceHealthCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // وقت التشغيل
-                Column(horizontalAlignment = Alignment.Start) {
-                    Text(text = "مدة التشغيل (Uptime)", fontSize = 11.sp, color = TextSecondary)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "مدة التشغيل",
+                        fontSize = 10.5.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
                     Text(
                         text = snapshot.uptimeFormatted,
-                        fontSize = 15.sp,
+                        fontSize = 13.5.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
-                        color = CyberCyan
+                        color = CyberCyan,
+                        maxLines = 1
                     )
                 }
 
                 // استهلاك الذاكرة
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "استهلاك الذاكرة (RAM)", fontSize = 11.sp, color = TextSecondary)
+                Column(
+                    modifier = Modifier.weight(1.2f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        text = "${snapshot.usedMemoryMb} MB (${snapshot.memoryUsagePercent}%)",
-                        fontSize = 15.sp,
+                        text = "الذاكرة (RAM)",
+                        fontSize = 10.5.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${snapshot.usedMemoryMb}MB (${snapshot.memoryUsagePercent}%)",
+                        fontSize = 13.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
-                        color = if (snapshot.memoryUsagePercent > 80) AmberWarning else WhatsAppGreenLight
+                        color = if (snapshot.memoryUsagePercent > 80) AmberWarning else WhatsAppGreenLight,
+                        maxLines = 1
                     )
                 }
 
                 // حالة الأتمتة
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "حالة الأتمتة", fontSize = 11.sp, color = TextSecondary)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = "الأتمتة",
+                        fontSize = 10.5.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
                     Text(
                         text = if (snapshot.isAutomationActive) "مفعّلة ⚡" else "مؤقتة ⏸️",
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (snapshot.isAutomationActive) WhatsAppGreenLight else AmberWarning
+                        color = if (snapshot.isAutomationActive) WhatsAppGreenLight else AmberWarning,
+                        maxLines = 1
                     )
                 }
             }

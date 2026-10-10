@@ -32,8 +32,8 @@ object DatabaseModule {
             AppDatabase.DATABASE_NAME
         )
             .addCallback(AppDatabase.createCallback())
-            .addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6)
-            .fallbackToDestructiveMigration()
+            .addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10)
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
     }
 
@@ -57,4 +57,10 @@ object DatabaseModule {
 
     @Provides
     fun provideGroupLogDao(database: AppDatabase): GroupLogDao = database.groupLogDao()
+
+    @Provides
+    fun provideOutboxDao(database: AppDatabase): com.whatsup.automation.data.local.dao.OutboxDao = database.outboxDao()
+
+    @Provides
+    fun provideVaultDao(database: AppDatabase): com.whatsup.automation.data.local.dao.VaultDao = database.vaultDao()
 }

@@ -78,8 +78,17 @@ open class DeviceContactsManager {
     // ذاكرة كاش مفهرسة فائقة السرعة في الذاكرة (In-Memory Resolution Cache) لتفادي استعلامات IPC المتكررة
     private val contactResolutionCache = java.util.concurrent.ConcurrentHashMap<String, ContactResolution>()
 
+    @Volatile
+    private var cachedDeviceContacts: List<DeviceContactItem>? = null
+    private var lastContactsFetchTime: Long = 0L
+    private val contactsCacheLock = Any()
+
     fun notifyContactsChanged() {
         contactResolutionCache.clear()
+        synchronized(contactsCacheLock) {
+            cachedDeviceContacts = null
+            lastContactsFetchTime = 0L
+        }
         _contactsUpdateTrigger.value = System.currentTimeMillis()
     }
 
@@ -881,9 +890,17 @@ open class DeviceContactsManager {
     }
 
     /**
-     * جلب كافة جهات الاتصال المسجلة في دفتر أسماء هاتف أندرويد.
+     * جلب كافة جهات الاتصال المسجلة في دفتر أسماء هاتف أندرويد مع كاش ذري فائق السرعة (Smart Memory Cache).
      */
     open fun getAllDeviceContacts(): List<DeviceContactItem> {
+        val now = System.currentTimeMillis()
+        synchronized(contactsCacheLock) {
+            val cached = cachedDeviceContacts
+            if (cached != null && (now - lastContactsFetchTime) < 60_000L) {
+                return cached
+            }
+        }
+
         val ctx = context ?: return emptyList()
         if (!hasReadPermission()) return emptyList()
 
@@ -927,6 +944,11 @@ open class DeviceContactsManager {
                 }
             }
         } catch (_: Exception) {}
+
+        synchronized(contactsCacheLock) {
+            cachedDeviceContacts = result
+            lastContactsFetchTime = System.currentTimeMillis()
+        }
 
         return result
     }

@@ -88,8 +88,31 @@ class ProcessIncomingMessageUseCase @Inject constructor(
             com.whatsup.automation.domain.util.SemanticIntent.REGISTER_CONTACT,
             com.whatsup.automation.domain.util.SemanticIntent.UPDATE_CONTACT -> {
                 if (isAlreadyRegistered) {
-                    // مسجل مسبقاً -> تجاهل صامت تام كما هو مطلوب
-                    return ProcessResult.Ignored("الجهة مسجلة مسبقاً باسم $existingContactName - تجاهل صامت")
+                    if (formattingSettings.isEnabled && formattingSettings.replyIfAlreadyRegistered && !message.id.startsWith("NOTIF_")) {
+                        val replyTemplate = formattingSettings.replyAlreadyRegisteredMessage.ifBlank {
+                            "أهلاً بك! أنت مسجل مسبقاً لدينا باسم {name} 🌟"
+                        }
+                        val finalReply = com.whatsup.automation.domain.util.SpintaxEngine.process(
+                            template = replyTemplate,
+                            recipientName = existingContactName ?: message.senderName,
+                            recipientPhone = targetPhone
+                        )
+
+                        logRepository.insertLog(
+                            ActivityLog(
+                                senderPhone = targetPhone,
+                                messageText = message.text,
+                                matchedRule = "جهة مسجلة مسبقاً",
+                                actionExecuted = "تم الرد: $finalReply",
+                                status = LogStatus.SUCCESS,
+                                extractedName = existingContactName
+                            )
+                        )
+
+                        return ProcessResult.Executed("جهة مسجلة مسبقاً", listOf(ActionResult.ReplySent(finalReply)))
+                    } else {
+                        return ProcessResult.Ignored("الجهة مسجلة مسبقاً باسم $existingContactName - تجاهل صامت")
+                    }
                 } else if (formattingSettings.isEnabled && !message.id.startsWith("NOTIF_")) {
                     val extractedName = intentResult.extractedRawName
                     if (!extractedName.isNullOrBlank() && com.whatsup.automation.domain.util.NameExtractorHelper.isValidHumanName(extractedName)) {

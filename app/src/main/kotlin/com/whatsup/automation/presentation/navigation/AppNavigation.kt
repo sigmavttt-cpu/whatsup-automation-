@@ -76,22 +76,26 @@ sealed class Screen(
     )
 
     // المسارات الفرعية للتوافق والتوجيه المباشر
+    data object Vault : Screen("vault", "الخزينة السرية", Icons.Filled.Security, Icons.Outlined.Security)
     data object Groups : Screen("groups", "المجموعات", Icons.Filled.Groups, Icons.Outlined.Groups)
     data object Rules : Screen("rules", "القواعد", Icons.Filled.Bolt, Icons.Outlined.Bolt)
     data object Statuses : Screen("statuses", "الحالات", Icons.Filled.AutoStories, Icons.Outlined.AutoStories)
+    data object Analytics : Screen("analytics", "الإحصائيات", Icons.Filled.BarChart, Icons.Outlined.BarChart)
     data object Pairing : Screen("pairing", "الربط", Icons.Filled.QrCode2, Icons.Outlined.QrCode2)
     data object Logs : Screen("logs", "السجلات", Icons.Filled.Tune, Icons.Outlined.Tune)
 }
 
 val bottomNavItems = listOf(
     Screen.Dashboard,
-    Screen.Automation,
     Screen.ChatsHub,
-    Screen.System
+    Screen.Automation,
+    Screen.Statuses,
+    Screen.System,
+    Screen.Analytics
 )
 
 /**
- * شريط تنقل سفلي عائم بتصميم Dynamic Glass Island 2.0 ومؤشرات نيون حية.
+ * شريط تنقل سفلي عائم بتصميم White Emerald Glass والمؤشرات الحية.
  */
 @Composable
 fun ModernBottomNavBar(
@@ -112,14 +116,14 @@ fun ModernBottomNavBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xF8090F1C))
+                .background(Color(0xFFFFFFFF))
                 .border(
                     width = 1.dp,
                     brush = Brush.horizontalGradient(
                         listOf(
-                            Color(0x3500F2FE),
-                            Color(0x5510B981),
-                            Color(0x358B5CF6)
+                            Color(0x3300A884),
+                            Color(0x6600A884),
+                            Color(0x3300A884)
                         )
                     ),
                     shape = RoundedCornerShape(28.dp)
@@ -136,12 +140,12 @@ fun ModernBottomNavBar(
                     label = "tabScale"
                 )
                 val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) WhatsAppGreenLight else TextMuted,
+                    targetValue = if (isSelected) WhatsAppGreen else TextSecondary,
                     animationSpec = tween(250),
                     label = "iconTint"
                 )
                 val bgPillColor by animateColorAsState(
-                    targetValue = if (isSelected) WhatsAppGreen.copy(alpha = 0.18f) else Color.Transparent,
+                    targetValue = if (isSelected) WhatsAppGreen.copy(alpha = 0.12f) else Color.Transparent,
                     animationSpec = tween(250),
                     label = "bgPill"
                 )
@@ -167,34 +171,34 @@ fun ModernBottomNavBar(
                                 }
                             }
                         }
-                        .padding(vertical = 6.dp, horizontal = 2.dp),
+                        .padding(vertical = 5.dp, horizontal = 1.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(1.5.dp)
                     ) {
                         Icon(
                             imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                             contentDescription = screen.title,
                             tint = iconTint,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(19.dp)
                         )
 
                         Text(
                             text = screen.title,
-                            fontSize = 10.5.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = iconTint,
                             maxLines = 1
                         )
 
-                        // نقطة نيون سفلية نشطة
+                        // نقطة زمردية سفلية نشطة
                         Box(
                             modifier = Modifier
                                 .size(if (isSelected) 4.dp else 0.dp)
                                 .clip(CircleShape)
-                                .background(if (isSelected) CyberCyan else Color.Transparent)
+                                .background(if (isSelected) WhatsAppGreen else Color.Transparent)
                         )
                     }
                 }

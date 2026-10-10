@@ -49,10 +49,14 @@ data class ChatsHubUiState(
     val unregisteredList: List<UnregisteredContactItem> = emptyList(),
     val registeredAllList: List<RegisteredContactItem> = emptyList(),
     val registeredTodayList: List<RegisteredTodayItem> = emptyList(),
+    val deletedMessages: List<com.whatsup.automation.domain.model.VaultItem> = emptyList(),
+    val vaultMediaItems: List<com.whatsup.automation.domain.model.VaultItem> = emptyList(),
     val searchQuery: String = "",
     val isLoading: Boolean = false
 ) {
     val unregisteredCount: Int get() = unregisteredList.size
     val registeredAllCount: Int get() = registeredAllList.size
     val registeredTodayCount: Int get() = registeredTodayList.size
+    val deletedCount: Int get() = deletedMessages.size
+    val vaultMediaCount: Int get() = vaultMediaItems.size
 }

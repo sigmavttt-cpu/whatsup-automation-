@@ -123,6 +123,8 @@ class StatusRepositoryImpl @Inject constructor(
         const val KEY_AUTO_REACT = "auto_react_enabled"
         const val KEY_DEFAULT_EMOJI = "default_emoji"
         const val KEY_AUTO_DOWNLOAD = "auto_download_media"
+        const val KEY_MUTED_SENDERS = "muted_senders"
+        const val KEY_FAVORITE_SENDERS = "favorite_senders"
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -132,7 +134,9 @@ class StatusRepositoryImpl @Inject constructor(
             autoViewEnabled = prefs.getBoolean(KEY_AUTO_VIEW, true),
             autoReactEnabled = prefs.getBoolean(KEY_AUTO_REACT, true),
             defaultEmoji = prefs.getString(KEY_DEFAULT_EMOJI, "💚") ?: "💚",
-            autoDownloadMedia = prefs.getBoolean(KEY_AUTO_DOWNLOAD, false)
+            autoDownloadMedia = prefs.getBoolean(KEY_AUTO_DOWNLOAD, false),
+            mutedSenders = prefs.getStringSet(KEY_MUTED_SENDERS, emptySet()) ?: emptySet(),
+            favoriteSenders = prefs.getStringSet(KEY_FAVORITE_SENDERS, emptySet()) ?: emptySet()
         )
     )
 
@@ -145,7 +149,19 @@ class StatusRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertStatus(status: com.whatsup.automation.domain.model.StatusStory) {
-        statusDao.insertStatus(status.toEntity())
+        val existing = statusDao.getStatusById(status.id)
+        if (existing != null) {
+            val preserved = status.toEntity().copy(
+                isViewed = existing.isViewed || status.isViewed,
+                viewedAt = existing.viewedAt ?: status.viewedAt?.toEpochMilli(),
+                isReacted = existing.isReacted || status.isReacted,
+                reactionEmoji = existing.reactionEmoji ?: status.reactionEmoji,
+                reactionSentAt = existing.reactionSentAt ?: status.reactionSentAt?.toEpochMilli()
+            )
+            statusDao.insertStatus(preserved)
+        } else {
+            statusDao.insertStatus(status.toEntity())
+        }
     }
 
     override suspend fun markAsViewed(statusId: String, timestamp: Long) {
@@ -187,6 +203,8 @@ class StatusRepositoryImpl @Inject constructor(
             .putBoolean(KEY_AUTO_REACT, settings.autoReactEnabled)
             .putString(KEY_DEFAULT_EMOJI, settings.defaultEmoji)
             .putBoolean(KEY_AUTO_DOWNLOAD, settings.autoDownloadMedia)
+            .putStringSet(KEY_MUTED_SENDERS, settings.mutedSenders)
+            .putStringSet(KEY_FAVORITE_SENDERS, settings.favoriteSenders)
             .apply()
         settingsFlow.value = settings
     }
@@ -195,6 +213,78 @@ class StatusRepositoryImpl @Inject constructor(
         // حذف الحالات التي مضى عليها أكثر من 24 ساعة (مدة صلاحية حالة واتساب)
         val expiryTime = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
         statusDao.deleteExpiredStatuses(expiryTime)
+    }
+
+    override suspend fun toggleFavorite(statusId: String, isFavorite: Boolean) {
+        statusDao.updateFavorite(statusId, isFavorite)
+        val status = statusDao.getStatusById(statusId)
+        if (status != null) {
+            val current = settingsFlow.value
+            val updatedFavorites = if (isFavorite) {
+                current.favoriteSenders + status.senderPhone
+            } else {
+                current.favoriteSenders - status.senderPhone
+            }
+            updateSettings(current.copy(favoriteSenders = updatedFavorites))
+        }
+    }
+
+    override suspend fun toggleMuted(statusId: String, isMuted: Boolean) {
+        statusDao.updateMuted(statusId, isMuted)
+        val status = statusDao.getStatusById(statusId)
+        if (status != null) {
+            val current = settingsFlow.value
+            val updatedMuted = if (isMuted) {
+                current.mutedSenders + status.senderPhone
+            } else {
+                current.mutedSenders - status.senderPhone
+            }
+            updateSettings(current.copy(mutedSenders = updatedMuted))
+        }
+    }
+
+    override suspend fun toggleFavoriteBySender(senderPhone: String, isFavorite: Boolean) {
+        statusDao.updateFavoriteBySender(senderPhone, isFavorite)
+        val current = settingsFlow.value
+        val updatedFavorites = if (isFavorite) {
+            current.favoriteSenders + senderPhone
+        } else {
+            current.favoriteSenders - senderPhone
+        }
+        updateSettings(current.copy(favoriteSenders = updatedFavorites))
+    }
+
+    override suspend fun toggleMutedBySender(senderPhone: String, isMuted: Boolean) {
+        statusDao.updateMutedBySender(senderPhone, isMuted)
+        val current = settingsFlow.value
+        val updatedMuted = if (isMuted) {
+            current.mutedSenders + senderPhone
+        } else {
+            current.mutedSenders - senderPhone
+        }
+        updateSettings(current.copy(mutedSenders = updatedMuted))
+    }
+
+    override suspend fun muteMultipleSenders(senderPhones: List<String>, isMuted: Boolean) {
+        for (phone in senderPhones) {
+            statusDao.updateMutedBySender(phone, isMuted)
+        }
+        val current = settingsFlow.value
+        val updatedMuted = if (isMuted) {
+            current.mutedSenders + senderPhones
+        } else {
+            current.mutedSenders - senderPhones.toSet()
+        }
+        updateSettings(current.copy(mutedSenders = updatedMuted))
+    }
+
+    override suspend fun markStatusAsDeleted(statusId: String) {
+        statusDao.markAsDeleted(statusId, System.currentTimeMillis())
+    }
+
+    override suspend fun deleteExpiredDeletedStatuses() {
+        val oneHourAgo = System.currentTimeMillis() - 3600_000L
+        statusDao.deleteExpiredDeletedStatuses(oneHourAgo)
     }
 }
 
@@ -266,7 +356,7 @@ internal fun LogEntity.toDomain(): ActivityLog {
         id = id,
         timestamp = Instant.ofEpochMilli(timestamp),
         senderPhone = senderPhone,
-        messageText = messageText,
+        messageText = com.whatsup.automation.data.security.AuditLogCipher.decrypt(messageText),
         matchedRule = matchedRule,
         actionExecuted = actionExecuted,
         status = try { LogStatus.valueOf(status) } catch (_: Exception) { LogStatus.NO_MATCH },
@@ -279,7 +369,7 @@ internal fun ActivityLog.toEntity(): LogEntity {
         id = id,
         timestamp = timestamp.toEpochMilli(),
         senderPhone = senderPhone,
-        messageText = messageText,
+        messageText = com.whatsup.automation.data.security.AuditLogCipher.encrypt(messageText),
         matchedRule = matchedRule,
         actionExecuted = actionExecuted,
         status = status.name,
@@ -305,7 +395,11 @@ internal fun com.whatsup.automation.data.local.entity.StatusEntity.toDomain(): c
         isReacted = isReacted,
         reactionEmoji = reactionEmoji,
         reactionSentAt = reactionSentAt?.let { Instant.ofEpochMilli(it) },
-        participant = participant
+        participant = participant,
+        isFavorite = isFavorite,
+        isMuted = isMuted,
+        isDeleted = isDeleted,
+        deletedAt = deletedAt?.let { Instant.ofEpochMilli(it) }
     )
 }
 
@@ -323,7 +417,11 @@ internal fun com.whatsup.automation.domain.model.StatusStory.toEntity(): com.wha
         isReacted = isReacted,
         reactionEmoji = reactionEmoji,
         reactionSentAt = reactionSentAt?.toEpochMilli(),
-        participant = participant
+        participant = participant,
+        isFavorite = isFavorite,
+        isMuted = isMuted,
+        isDeleted = isDeleted,
+        deletedAt = deletedAt?.toEpochMilli()
     )
 }
 
@@ -682,6 +780,8 @@ class ContactFormattingRepositoryImpl @Inject constructor(
         const val KEY_EMOJI = "formatting_emoji"
         const val KEY_KEYWORDS = "formatting_keywords"
         const val KEY_REPLY_MSG = "formatting_reply_msg"
+        const val KEY_REPLY_ALREADY_MSG = "formatting_reply_already_msg"
+        const val KEY_REPLY_ALREADY_ENABLED = "formatting_reply_already_enabled"
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -695,7 +795,9 @@ class ContactFormattingRepositoryImpl @Inject constructor(
             customTag = prefs.getString(KEY_TAG, "") ?: "",
             customEmoji = prefs.getString(KEY_EMOJI, "") ?: "",
             triggerKeywords = prefs.getString(KEY_KEYWORDS, "سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي") ?: "سجلني، احفظني، سجل اسمي، احفظ رقمي، اسمي",
-            replyMessage = prefs.getString(KEY_REPLY_MSG, "تم حفظك باسم {name} بنجاح ✅") ?: "تم حفظك باسم {name} بنجاح ✅"
+            replyMessage = prefs.getString(KEY_REPLY_MSG, "تم حفظك باسم {name} بنجاح ✅") ?: "تم حفظك باسم {name} بنجاح ✅",
+            replyAlreadyRegisteredMessage = prefs.getString(KEY_REPLY_ALREADY_MSG, "أهلاً بك! أنت مسجل مسبقاً لدينا باسم {name} 🌟") ?: "أهلاً بك! أنت مسجل مسبقاً لدينا باسم {name} 🌟",
+            replyIfAlreadyRegistered = prefs.getBoolean(KEY_REPLY_ALREADY_ENABLED, false)
         )
     )
 
@@ -712,6 +814,8 @@ class ContactFormattingRepositoryImpl @Inject constructor(
             .putString(KEY_EMOJI, settings.customEmoji)
             .putString(KEY_KEYWORDS, settings.triggerKeywords)
             .putString(KEY_REPLY_MSG, settings.replyMessage)
+            .putString(KEY_REPLY_ALREADY_MSG, settings.replyAlreadyRegisteredMessage)
+            .putBoolean(KEY_REPLY_ALREADY_ENABLED, settings.replyIfAlreadyRegistered)
             .apply()
         settingsFlow.value = settings
     }

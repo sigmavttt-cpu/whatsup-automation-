@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,14 +43,17 @@ import com.whatsup.automation.presentation.components.PhoneInputWithCountrySelec
 import com.whatsup.automation.presentation.components.SegmentedPillSelector
 import com.whatsup.automation.presentation.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PairingScreen(
     viewModel: PairingViewModel,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val pullToRefreshState = rememberPullToRefreshState()
 
     LaunchedEffect(Unit) {
         viewModel.checkAllPermissions(context)
@@ -157,15 +162,25 @@ fun PairingScreen(
         }
     }
 
-    Column(
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            viewModel.refreshConnection(context)
+        },
+        state = pullToRefreshState,
         modifier = modifier
             .fillMaxSize()
             .background(DarkBgPrimary)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 24.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 24.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
         // شريط الرأس
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -691,6 +706,7 @@ fun PairingScreen(
                 }
             }
         }
+    }
     }
 }
 

@@ -79,6 +79,9 @@ class BaileysBridgeManager @Inject constructor(
         val authDir = File(context.filesDir, "baileys_auth")
         if (!authDir.exists()) authDir.mkdirs()
 
+        val vaultDir = File(context.filesDir, "vault_media")
+        if (!vaultDir.exists()) vaultDir.mkdirs()
+
         val targetBundle = File(engineDir, BUNDLE_FILENAME)
         try {
             context.assets.open("nodejs-project/$BUNDLE_FILENAME").use { input ->

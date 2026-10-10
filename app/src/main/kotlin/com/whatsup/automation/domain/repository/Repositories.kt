@@ -47,6 +47,13 @@ interface StatusRepository {
     fun getSettings(): Flow<StatusAutomationSettings>
     suspend fun updateSettings(settings: StatusAutomationSettings)
     suspend fun deleteExpiredStatuses()
+    suspend fun toggleFavorite(statusId: String, isFavorite: Boolean)
+    suspend fun toggleMuted(statusId: String, isMuted: Boolean)
+    suspend fun toggleFavoriteBySender(senderPhone: String, isFavorite: Boolean)
+    suspend fun toggleMutedBySender(senderPhone: String, isMuted: Boolean)
+    suspend fun muteMultipleSenders(senderPhones: List<String>, isMuted: Boolean)
+    suspend fun markStatusAsDeleted(statusId: String)
+    suspend fun deleteExpiredDeletedStatuses()
 }
 
 /**

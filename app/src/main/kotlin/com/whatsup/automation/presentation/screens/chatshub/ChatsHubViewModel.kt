@@ -22,6 +22,7 @@ import javax.inject.Inject
 class ChatsHubViewModel @Inject constructor(
     private val logRepository: LogRepository,
     private val deviceContactsManager: DeviceContactsManager,
+    private val vaultRepository: com.whatsup.automation.domain.repository.VaultRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -30,6 +31,20 @@ class ChatsHubViewModel @Inject constructor(
 
     init {
         loadData()
+        observeVaultData()
+    }
+
+    private fun observeVaultData() {
+        viewModelScope.launch {
+            vaultRepository.getDeletedItems().collect { deleted ->
+                _uiState.update { it.copy(deletedMessages = deleted) }
+            }
+        }
+        viewModelScope.launch {
+            vaultRepository.getViewOnceItems().collect { media ->
+                _uiState.update { it.copy(vaultMediaItems = media) }
+            }
+        }
     }
 
     fun selectTab(tab: ChatsHubTab) {

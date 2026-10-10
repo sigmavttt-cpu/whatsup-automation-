@@ -56,5 +56,17 @@ abstract class AppModule {
     abstract fun bindNotificationRepository(
         impl: com.whatsup.automation.data.repository.NotificationRepositoryImpl
     ): com.whatsup.automation.domain.repository.NotificationRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUpdateRepository(
+        impl: com.whatsup.automation.data.repository.UpdateRepositoryImpl
+    ): com.whatsup.automation.domain.repository.UpdateRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindVaultRepository(
+        impl: com.whatsup.automation.data.repository.VaultRepositoryImpl
+    ): com.whatsup.automation.domain.repository.VaultRepository
 }
 

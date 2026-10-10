@@ -82,6 +82,15 @@ fun RulesScreen(
     }
 
     // نافذة إضافة أو تعديل قاعدة
+    if (uiState.showSimulationDialog) {
+        RuleSimulationDialog(
+            simulationResult = uiState.simulationResult,
+            isSimulating = uiState.isSimulating,
+            onDismiss = { viewModel.setSimulationDialogVisible(false) },
+            onRunSimulation = { message, phone -> viewModel.runSimulation(message, phone) }
+        )
+    }
+
     if (showAddDialog || ruleToEdit != null) {
         RuleFormDialog(
             initialRule = ruleToEdit,
@@ -164,6 +173,25 @@ fun RulesScreen(
                         IconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setSimulationDialogVisible(true)
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CyberCyan.copy(alpha = 0.2f))
+                                .border(1.dp, CyberCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                Icons.Filled.Science,
+                                contentDescription = "محاكي القواعد",
+                                tint = CyberCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 ruleToEdit = null
                                 showAddDialog = true
                             },
@@ -198,7 +226,10 @@ fun RulesScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .padding(end = 8.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -221,9 +252,11 @@ fun RulesScreen(
                                     ) {
                                         Text(
                                             text = "قاعدة تسجيل جهات الاتصال",
-                                            fontSize = 16.sp,
+                                            fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = TextPrimary
+                                            color = TextPrimary,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
                                         Box(
                                             modifier = Modifier
@@ -237,7 +270,9 @@ fun RulesScreen(
                                     Text(
                                         text = "التقاط اسم العميل وحفظه في دفتر الهاتف والرد عليه فوراً",
                                         fontSize = 11.sp,
-                                        color = TextSecondary
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -563,9 +598,11 @@ fun RuleCard(
 
                     Text(
                         text = rule.name,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (rule.isEnabled) TextPrimary else TextMuted
+                        color = if (rule.isEnabled) TextPrimary else TextMuted,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
@@ -583,20 +620,24 @@ fun RuleCard(
 
             // الكلمات المفتاحية
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "الكلمات المفتاحية:",
-                    fontSize = 13.sp,
+                    fontSize = 12.5.sp,
                     color = CyberCyan,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = rule.patternValue,
-                    fontSize = 14.sp,
+                    fontSize = 13.5.sp,
                     color = TextPrimary,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
 
@@ -704,12 +745,14 @@ fun RuleFormDialog(
                 borderBrush = ObsidianGlowBorder.Emerald
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = if (initialRule == null) "إضافة قاعدة رد تلقائي" else "تعديل قاعدة الرد",
-                        fontSize = 19.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )

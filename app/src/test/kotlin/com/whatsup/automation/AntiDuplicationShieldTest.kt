@@ -24,7 +24,7 @@ class AntiDuplicationShieldTest {
     private lateinit var fakeLogRepository: FakeLogRepository
     private lateinit var matchRuleUseCase: MatchRuleUseCase
     private lateinit var useCase: ProcessIncomingMessageUseCase
-    private lateinit var fakeContactFormattingRepo: com.whatsup.automation.domain.repository.ContactFormattingRepository
+    private lateinit var fakeContactFormattingRepo: FakeContactFormattingRepository
     private lateinit var fakeNotificationRepo: com.whatsup.automation.domain.repository.NotificationRepository
     private lateinit var mockEngine: com.whatsup.automation.data.engine.WhatsAppEngine
     private lateinit var memoryManager: com.whatsup.automation.domain.util.ConversationMemoryManager
@@ -35,10 +35,7 @@ class AntiDuplicationShieldTest {
         fakeRuleRepository = FakeRuleRepository()
         fakeLogRepository = FakeLogRepository()
         matchRuleUseCase = MatchRuleUseCase(fakeRuleRepository)
-        fakeContactFormattingRepo = object : com.whatsup.automation.domain.repository.ContactFormattingRepository {
-            override fun getSettings(): Flow<ContactFormattingSettings> = flowOf(ContactFormattingSettings())
-            override suspend fun updateSettings(settings: ContactFormattingSettings) {}
-        }
+        fakeContactFormattingRepo = FakeContactFormattingRepository()
         fakeNotificationRepo = object : com.whatsup.automation.domain.repository.NotificationRepository {
             override val notifications: StateFlow<List<AppNotification>> = MutableStateFlow(emptyList())
             override val unreadCount: StateFlow<Int> = MutableStateFlow(0)
@@ -364,6 +361,39 @@ class AntiDuplicationShieldTest {
             assertEquals("أحمد", fakeDeviceContactsManager.getContactDisplayName(phone))
             assertEquals(initialContactsCount, fakeDeviceContactsManager.savedContacts.size)
         }
+    }
+
+    @Test
+    fun testReplyIfAlreadyRegisteredFeature() = runBlocking {
+        val phone = "+967770999888"
+        fakeDeviceContactsManager.savedContacts[phone] = "سالم باوزير"
+
+        // تفعيل ميزة الرد على المسجلين مسبقاً
+        fakeContactFormattingRepo.updateSettings(
+            ContactFormattingSettings(
+                isEnabled = true,
+                replyIfAlreadyRegistered = true,
+                replyAlreadyRegisteredMessage = "أهلاً بك {name}! أنت مسجل مسبقاً لدينا 🌟"
+            )
+        )
+
+        val msg = IncomingMessage(id = "already_reg_1", senderPhone = phone, text = "سجلني سالم")
+        val result = useCase.execute(msg)
+
+        assertTrue(result is ProcessResult.Executed)
+        val executed = result as ProcessResult.Executed
+        assertEquals("جهة مسجلة مسبقاً", executed.ruleName)
+        val replyAction = executed.actions.first() as ActionResult.ReplySent
+        assertTrue(replyAction.message.contains("سالم باوزير"))
+        assertTrue(replyAction.message.contains("أنت مسجل مسبقاً لدينا"))
+    }
+}
+
+class FakeContactFormattingRepository : com.whatsup.automation.domain.repository.ContactFormattingRepository {
+    private val settingsFlow = kotlinx.coroutines.flow.MutableStateFlow(ContactFormattingSettings())
+    override fun getSettings(): Flow<ContactFormattingSettings> = settingsFlow
+    override suspend fun updateSettings(settings: ContactFormattingSettings) {
+        settingsFlow.value = settings
     }
 }
 

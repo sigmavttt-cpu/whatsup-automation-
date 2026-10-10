@@ -7,7 +7,9 @@
 import makeWASocket, {
     DisconnectReason,
     useMultiFileAuthState,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion,
+    downloadMediaMessage,
+    downloadContentFromMessage
 } from '@whiskeysockets/baileys';
 import {
     CONFIG,
@@ -40,6 +42,7 @@ import path from 'path';
 let sock = null;
 let isStarting = false;
 let currentAuthFolder = process.argv[2] || CONFIG.DEFAULT_AUTH_FOLDER;
+let heartbeatInterval = null;
 
 /**
  * Self-healing: Safely logs Signal session errors without destroying all unrelated sessions.
@@ -158,20 +161,36 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
         }
 
         if (connection === 'close') {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 403;
             const shouldReconnect = !isLoggedOut;
 
             isStarting = false;
 
             if (isLoggedOut) {
-                emitToAndroid('LOGGED_OUT', { reason: 'session_expired_or_logged_out' });
+                try {
+                    if (fs.existsSync(authFolder)) {
+                        fs.rmSync(authFolder, { recursive: true, force: true });
+                    }
+                } catch (err) {
+                    console.error('Failed to clean authFolder on logout:', err);
+                }
+                emitToAndroid('LOGGED_OUT', { 
+                    reason: 'تم تسجيل الخروج من الأجهزة المرتبطة في تطبيق واتساب' 
+                });
             }
 
             emitToAndroid('CONNECTION_STATE', {
                 status: 'DISCONNECTED',
                 reconnecting: shouldReconnect,
-                reason: lastDisconnect?.error?.message || (isLoggedOut ? 'logged_out' : 'closed')
+                reason: isLoggedOut 
+                    ? 'تم تسجيل الخروج من واتساب' 
+                    : (lastDisconnect?.error?.message || 'closed')
             });
 
             if (shouldReconnect) {
@@ -184,6 +203,30 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
             try {
                 await sock.sendPresenceUpdate('available');
             } catch (_) {}
+
+            // مستشعر النبض الحي (Heartbeat Pinger) لفحص حيوية المقبس كل 45 ثانية وكشف السقوط الصامت
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(async () => {
+                if (sock && sock.user) {
+                    try {
+                        await sock.sendPresenceUpdate('available');
+                    } catch (err) {
+                        console.warn('[Heartbeat Pinger] Silent socket drop detected:', err?.message);
+                        if (heartbeatInterval) {
+                            clearInterval(heartbeatInterval);
+                            heartbeatInterval = null;
+                        }
+                        emitToAndroid('CONNECTION_STATE', {
+                            status: 'DISCONNECTED',
+                            reconnecting: true,
+                            reason: 'انقطع اتصال المقبس بصمت (Silent Socket Drop)'
+                        });
+                        try { sock.end(); } catch (_) {}
+                        sock = null;
+                        setTimeout(() => startWhatsAppSession(authFolder), 3000);
+                    }
+                }
+            }, 45000);
 
             emitToAndroid('CONNECTION_STATE', {
                 status: 'CONNECTED',
@@ -339,12 +382,164 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                 }
             }
 
-            const text = msg.message.conversation ||
-                         msg.message.extendedTextMessage?.text ||
-                         msg.message.imageMessage?.caption ||
-                         msg.message.videoMessage?.caption ||
-                         msg.message.documentMessage?.caption ||
-                         '';
+            // 1. فحص وجود وسائط (عرض لمرة واحدة أو وسائط عادية)
+            let rootMsg = msg.message;
+            if (rootMsg?.ephemeralMessage?.message) {
+                rootMsg = rootMsg.ephemeralMessage.message;
+            }
+            const viewOnceObj = rootMsg?.viewOnceMessage?.message 
+                             || rootMsg?.viewOnceMessageV2?.message 
+                             || rootMsg?.viewOnceMessageV2Extension?.message;
+
+            const isViewOnce = !!viewOnceObj;
+            const targetMediaMsg = viewOnceObj || rootMsg;
+
+            const isImage = !!targetMediaMsg?.imageMessage;
+            const isVideo = !!targetMediaMsg?.videoMessage;
+            const isAudio = !!targetMediaMsg?.audioMessage;
+            const isDoc = !!targetMediaMsg?.documentMessage;
+            const hasMedia = isImage || isVideo || isAudio || isDoc;
+
+            const mediaType = isImage ? 'IMAGE' : (isVideo ? 'VIDEO' : (isAudio ? 'AUDIO' : (isDoc ? 'DOCUMENT' : 'IMAGE')));
+            const mediaTypeLower = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : (isDoc ? 'document' : 'image')));
+            const mediaObj = targetMediaMsg?.imageMessage || targetMediaMsg?.videoMessage || targetMediaMsg?.audioMessage || targetMediaMsg?.documentMessage;
+            const mime = mediaObj?.mimetype || (isImage ? 'image/jpeg' : (isVideo ? 'video/mp4' : (isAudio ? 'audio/ogg' : 'application/octet-stream')));
+            const ext = isImage ? 'jpg' : (isVideo ? 'mp4' : (isAudio ? 'ogg' : 'bin'));
+
+            if (hasMedia && mediaObj) {
+                const vaultDir = path.join(authFolder, '..', 'vault_media');
+                try {
+                    if (!fs.existsSync(vaultDir)) fs.mkdirSync(vaultDir, { recursive: true });
+                } catch (eDir) {
+                    console.error('[VAULT] Failed to create vault directory:', eDir);
+                }
+                const fileNamePrefix = isViewOnce ? 'viewonce' : 'media';
+                const filePath = path.join(vaultDir, `${fileNamePrefix}_${msg.key.id}.${ext}`);
+
+                (async () => {
+                    let buffer = null;
+
+                    // المحاولة 1: التنزيل المباشر الصريح لفك تشفير التدفق عبر downloadContentFromMessage
+                    try {
+                        if ((mediaObj.url || mediaObj.directPath) && mediaObj.mediaKey) {
+                            const stream = await downloadContentFromMessage(mediaObj, mediaTypeLower);
+                            const chunks = [];
+                            for await (const chunk of stream) {
+                                chunks.push(chunk);
+                            }
+                            buffer = Buffer.concat(chunks);
+                        }
+                    } catch (e1) {
+                        logger.warn(`[VAULT] downloadContentFromMessage (${mediaTypeLower}) failed: ${e1.message}`);
+                    }
+
+                    // المحاولة 2: التنزيل عبر downloadMediaMessage وسياق السوكت
+                    const downloadOptions = {
+                        logger: logger,
+                        reuploadRequest: sock?.updateMediaMessage ? sock.updateMediaMessage.bind(sock) : undefined
+                    };
+
+                    if (!buffer || buffer.length === 0) {
+                        try {
+                            buffer = await downloadMediaMessage(msg, 'buffer', {}, downloadOptions);
+                        } catch (e2) {
+                            logger.warn(`[VAULT] downloadMediaMessage original msg failed: ${e2.message}`);
+                        }
+                    }
+
+                    // المحاولة 3: التنزيل عبر رسالة تركيبية مفككة
+                    if (!buffer || buffer.length === 0) {
+                        try {
+                            const syntheticMsg = {
+                                key: msg.key,
+                                message: { [`${mediaTypeLower}Message`]: mediaObj }
+                            };
+                            buffer = await downloadMediaMessage(syntheticMsg, 'buffer', {}, downloadOptions);
+                        } catch (e3) {
+                            logger.warn(`[VAULT] downloadMediaMessage synthetic failed: ${e3.message}`);
+                        }
+                    }
+
+                    if (buffer && buffer.length > 0) {
+                        try {
+                            fs.writeFileSync(filePath, buffer);
+                            console.log(`[VAULT] Media captured successfully: ${filePath} (${buffer.length} bytes, viewOnce=${isViewOnce})`);
+                            
+                            // حفظ في الكاش لاسترجاعه فوراً عند الحذف للجميع
+                            rawMessagesCache.set(`media_file_${msg.key.id}`, {
+                                localFilePath: filePath,
+                                mimeType: mime,
+                                fileSizeBytes: buffer.length,
+                                mediaType: mediaType,
+                                originalText: mediaObj?.caption || ''
+                            });
+
+                            emitToAndroid('VAULT_MEDIA_CAPTURED', {
+                                id: msg.key.id,
+                                senderPhone: cleanPhone,
+                                senderName: msg.pushName || getContactName(cleanPhone) || '',
+                                mediaType: mediaType,
+                                isViewOnce: isViewOnce,
+                                originalText: mediaObj?.caption || '',
+                                localFilePath: filePath,
+                                mimeType: mime,
+                                fileSizeBytes: buffer.length,
+                                timestamp: Date.now()
+                            });
+                        } catch (writeErr) {
+                            console.error('[VAULT] Failed to write vault media file:', writeErr);
+                        }
+                    } else {
+                        console.warn('[VAULT] Failed to download media buffer for:', msg.key.id);
+                    }
+                })().catch(topErr => {
+                    console.error('[VAULT] Unhandled error in media capture:', topErr);
+                });
+            }
+
+            // 2. التقاط إشارة حذف الرسائل لدى الجميع (Anti-Delete Revocation)
+            const protocolMsg = msg.message?.protocolMessage;
+            if (protocolMsg && protocolMsg.type === 0 && protocolMsg.key?.id) {
+                const revokedId = protocolMsg.key.id;
+                const cachedMedia = rawMessagesCache.get(`media_file_${revokedId}`);
+                if (cachedMedia) {
+                    emitToAndroid('VAULT_MEDIA_CAPTURED', {
+                        id: revokedId,
+                        senderPhone: cleanPhone || actualSender,
+                        senderName: msg.pushName || getContactName(cleanPhone) || '',
+                        mediaType: cachedMedia.mediaType,
+                        isViewOnce: false,
+                        originalText: cachedMedia.originalText,
+                        localFilePath: cachedMedia.localFilePath,
+                        mimeType: cachedMedia.mimeType,
+                        fileSizeBytes: cachedMedia.fileSizeBytes,
+                        timestamp: Date.now()
+                    });
+                }
+                emitToAndroid('MESSAGE_REVOKED', {
+                    id: revokedId,
+                    senderPhone: cleanPhone || actualSender,
+                    timestamp: Date.now()
+                });
+                continue;
+            }
+
+            // 3. استخراج النص أو وضع نص بديل للوسائط بدون تعليق
+            let text = msg.message.conversation ||
+                       msg.message.extendedTextMessage?.text ||
+                       msg.message.imageMessage?.caption ||
+                       msg.message.videoMessage?.caption ||
+                       msg.message.documentMessage?.caption ||
+                       viewOnceObj?.imageMessage?.caption ||
+                       viewOnceObj?.videoMessage?.caption ||
+                       '';
+
+            if (!text && hasMedia) {
+                if (isImage) text = isViewOnce ? '📷 [صورة عرض لمرة واحدة]' : '📷 [صورة]';
+                else if (isVideo) text = isViewOnce ? '🎥 [فيديو عرض لمرة واحدة]' : '🎥 [فيديو]';
+                else if (isAudio) text = '🎙️ [رسالة صوتية]';
+                else if (isDoc) text = '📄 [مستند]';
+            }
 
             if (!text || !cleanPhone) continue;
 

@@ -24,6 +24,9 @@ data class DashboardUiState(
     val recentLogs: List<ActivityLog> = emptyList(),
     val isRefreshing: Boolean = false,
     val isWritePermissionGranted: Boolean = true,
+    val rulesCount: Int = 0,
+    val isPreviewHidden: Boolean = true,
+    val isTerminalExpanded: Boolean = false,
     val terminalLines: List<String> = listOf(
         "[$] تهيئة محرك الأتمتة المحلي...",
         "[$] التحقق من الجلسات الآمنة في Android KeyStore...",
@@ -36,6 +39,7 @@ class DashboardViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val whatsAppEngine: WhatsAppEngine,
     private val logRepository: LogRepository,
+    private val ruleRepository: com.whatsup.automation.domain.repository.RuleRepository,
     private val syncedContactDao: SyncedContactDao,
     private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager,
     private val notificationRepository: com.whatsup.automation.domain.repository.NotificationRepository,
@@ -69,6 +73,7 @@ class DashboardViewModel @Inject constructor(
         observeContacts()
         observeLogs()
         observeEngineDiagnostics()
+        observeRules()
         refreshStats()
         startAutoRefresh()
     }
@@ -189,6 +194,22 @@ class DashboardViewModel @Inject constructor(
             val stats = logRepository.getStats()
             _uiState.update { it.copy(stats = stats) }
         }
+    }
+
+    private fun observeRules() {
+        viewModelScope.launch {
+            ruleRepository.getAllRules().collect { rules ->
+                _uiState.update { it.copy(rulesCount = rules.size) }
+            }
+        }
+    }
+
+    fun togglePreviewPrivacy() {
+        _uiState.update { it.copy(isPreviewHidden = !it.isPreviewHidden) }
+    }
+
+    fun toggleTerminalExpanded() {
+        _uiState.update { it.copy(isTerminalExpanded = !it.isTerminalExpanded) }
     }
 
     fun toggleService() {

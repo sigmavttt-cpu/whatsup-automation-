@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -59,6 +60,26 @@ import com.whatsup.automation.service.WhatsAppForegroundService
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import com.whatsup.automation.data.local.contacts.ContactsSyncManager
+import com.whatsup.automation.data.security.AppLockManager
+import com.whatsup.automation.presentation.components.AppLockOverlay
+import com.whatsup.automation.presentation.components.AppLockSettingsDialog
+import com.whatsup.automation.presentation.navigation.AppNavigationDrawer
+import com.whatsup.automation.presentation.screens.vault.VaultScreen
+import com.whatsup.automation.presentation.screens.vault.VaultViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -75,6 +96,14 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var contactsSyncManager: ContactsSyncManager
+
+    @Inject
+    lateinit var appLockManager: AppLockManager
+
+    override fun onStop() {
+        super.onStop()
+        appLockManager.lock()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,112 +159,187 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    val updateViewModel: com.whatsup.automation.presentation.screens.update.UpdateViewModel = hiltViewModel()
+
+                    LaunchedEffect(Unit) {
+                        updateViewModel.checkForUpdates(isManual = false)
+                    }
+
                     val navController = rememberNavController()
+                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    val scope = rememberCoroutineScope()
+                    var showLockSettingsDialog by remember { mutableStateOf(false) }
 
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        containerColor = DarkBgPrimary,
-                        bottomBar = {
-                            ModernBottomNavBar(navController = navController)
-                        }
-                    ) { innerPadding ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding)
-                        ) {
-                            NavHost(
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        gesturesEnabled = true,
+                        drawerContent = {
+                            AppNavigationDrawer(
                                 navController = navController,
-                                startDestination = Screen.Dashboard.route
-                            ) {
-                                composable(Screen.Dashboard.route) {
-                                    val viewModel: DashboardViewModel = hiltViewModel()
-                                    DashboardScreen(viewModel = viewModel)
+                                drawerState = drawerState,
+                                scope = scope,
+                                whatsAppEngine = whatsAppEngine,
+                                sessionKeystore = sessionKeystore,
+                                appLockManager = appLockManager,
+                                onOpenLockSettings = { showLockSettingsDialog = true },
+                                onCheckUpdates = { updateViewModel.checkForUpdates(isManual = true) }
+                            )
+                        }
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Scaffold(
+                                modifier = Modifier.fillMaxSize(),
+                                containerColor = DarkBgPrimary,
+                                bottomBar = {
+                                    ModernBottomNavBar(navController = navController)
                                 }
+                            ) { innerPadding ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding)
+                                ) {
+                                    NavHost(
+                                        navController = navController,
+                                        startDestination = Screen.Dashboard.route
+                                    ) {
+                                        composable(Screen.Dashboard.route) {
+                                            val viewModel: DashboardViewModel = hiltViewModel()
+                                            DashboardScreen(
+                                                viewModel = viewModel,
+                                                onNavigateToPairing = { navController.navigate(Screen.System.route) },
+                                                onNavigateToRules = { navController.navigate(Screen.Automation.route) },
+                                                onNavigateToLogs = { navController.navigate(Screen.System.route) }
+                                            )
+                                        }
 
-                                composable(Screen.Automation.route) {
-                                    val rulesViewModel: RulesViewModel = hiltViewModel()
-                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
-                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
-                                    AutomationHubScreen(
-                                        rulesViewModel = rulesViewModel,
-                                        statusesViewModel = statusesViewModel,
-                                        groupsViewModel = groupsViewModel
-                                    )
-                                }
+                                        composable(Screen.Vault.route) {
+                                            val vaultViewModel: VaultViewModel = hiltViewModel()
+                                            VaultScreen(viewModel = vaultViewModel)
+                                        }
 
-                                composable(Screen.ChatsHub.route) {
-                                    val viewModel: ChatsHubViewModel = hiltViewModel()
-                                    ChatsHubScreen(viewModel = viewModel)
-                                }
+                                        composable(Screen.Automation.route) {
+                                            val rulesViewModel: RulesViewModel = hiltViewModel()
+                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                            val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                            AutomationHubScreen(
+                                                rulesViewModel = rulesViewModel,
+                                                statusesViewModel = statusesViewModel,
+                                                groupsViewModel = groupsViewModel
+                                            )
+                                        }
 
-                                composable(Screen.System.route) {
-                                    val pairingViewModel: PairingViewModel = hiltViewModel()
-                                    val logsViewModel: LogsViewModel = hiltViewModel()
-                                    SystemHubScreen(
-                                        pairingViewModel = pairingViewModel,
-                                        logsViewModel = logsViewModel
-                                    )
-                                }
+                                        composable(Screen.ChatsHub.route) {
+                                            val viewModel: ChatsHubViewModel = hiltViewModel()
+                                            ChatsHubScreen(viewModel = viewModel)
+                                        }
 
-                                // المسارات الفرعية للتوجيه المباشر
-                                composable(Screen.Rules.route) {
-                                    val rulesViewModel: RulesViewModel = hiltViewModel()
-                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
-                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
-                                    AutomationHubScreen(
-                                        rulesViewModel = rulesViewModel,
-                                        statusesViewModel = statusesViewModel,
-                                        groupsViewModel = groupsViewModel,
-                                        initialTab = AutomationTab.RULES
-                                    )
-                                }
+                                        composable(Screen.System.route) {
+                                            val pairingViewModel: PairingViewModel = hiltViewModel()
+                                            val logsViewModel: LogsViewModel = hiltViewModel()
+                                            SystemHubScreen(
+                                                pairingViewModel = pairingViewModel,
+                                                logsViewModel = logsViewModel
+                                            )
+                                        }
 
-                                composable(Screen.Statuses.route) {
-                                    val rulesViewModel: RulesViewModel = hiltViewModel()
-                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
-                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
-                                    AutomationHubScreen(
-                                        rulesViewModel = rulesViewModel,
-                                        statusesViewModel = statusesViewModel,
-                                        groupsViewModel = groupsViewModel,
-                                        initialTab = AutomationTab.STATUSES
-                                    )
-                                }
+                                        // المسارات الفرعية للتوجيه المباشر
+                                        composable(Screen.Rules.route) {
+                                            val rulesViewModel: RulesViewModel = hiltViewModel()
+                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                            val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                            AutomationHubScreen(
+                                                rulesViewModel = rulesViewModel,
+                                                statusesViewModel = statusesViewModel,
+                                                groupsViewModel = groupsViewModel,
+                                                initialTab = AutomationTab.RULES
+                                            )
+                                        }
 
-                                composable(Screen.Groups.route) {
-                                    val rulesViewModel: RulesViewModel = hiltViewModel()
-                                    val statusesViewModel: StatusesViewModel = hiltViewModel()
-                                    val groupsViewModel: GroupsViewModel = hiltViewModel()
-                                    AutomationHubScreen(
-                                        rulesViewModel = rulesViewModel,
-                                        statusesViewModel = statusesViewModel,
-                                        groupsViewModel = groupsViewModel,
-                                        initialTab = AutomationTab.GROUPS
-                                    )
-                                }
+                                        composable(Screen.Statuses.route) {
+                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                            StatusesScreen(viewModel = statusesViewModel)
+                                        }
 
-                                composable(Screen.Pairing.route) {
-                                    val pairingViewModel: PairingViewModel = hiltViewModel()
-                                    val logsViewModel: LogsViewModel = hiltViewModel()
-                                    SystemHubScreen(
-                                        pairingViewModel = pairingViewModel,
-                                        logsViewModel = logsViewModel,
-                                        initialTab = SystemTab.PAIRING
-                                    )
-                                }
+                                        composable(Screen.Analytics.route) {
+                                            val analyticsViewModel: com.whatsup.automation.presentation.screens.analytics.AnalyticsViewModel = hiltViewModel()
+                                            com.whatsup.automation.presentation.screens.analytics.AnalyticsScreen(viewModel = analyticsViewModel)
+                                        }
 
-                                composable(Screen.Logs.route) {
-                                    val pairingViewModel: PairingViewModel = hiltViewModel()
-                                    val logsViewModel: LogsViewModel = hiltViewModel()
-                                    SystemHubScreen(
-                                        pairingViewModel = pairingViewModel,
-                                        logsViewModel = logsViewModel,
-                                        initialTab = SystemTab.LOGS
-                                    )
+                                        composable(Screen.Groups.route) {
+                                            val rulesViewModel: RulesViewModel = hiltViewModel()
+                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
+                                            val groupsViewModel: GroupsViewModel = hiltViewModel()
+                                            AutomationHubScreen(
+                                                rulesViewModel = rulesViewModel,
+                                                statusesViewModel = statusesViewModel,
+                                                groupsViewModel = groupsViewModel,
+                                                initialTab = AutomationTab.GROUPS
+                                            )
+                                        }
+
+                                        composable(Screen.Pairing.route) {
+                                            val pairingViewModel: PairingViewModel = hiltViewModel()
+                                            val logsViewModel: LogsViewModel = hiltViewModel()
+                                            SystemHubScreen(
+                                                pairingViewModel = pairingViewModel,
+                                                logsViewModel = logsViewModel,
+                                                initialTab = SystemTab.PAIRING
+                                            )
+                                        }
+
+                                        composable(Screen.Logs.route) {
+                                            val pairingViewModel: PairingViewModel = hiltViewModel()
+                                            val logsViewModel: LogsViewModel = hiltViewModel()
+                                            SystemHubScreen(
+                                                pairingViewModel = pairingViewModel,
+                                                logsViewModel = logsViewModel,
+                                                initialTab = SystemTab.LOGS
+                                            )
+                                        }
+                                    }
+
+                                    // زر القائمة الجانبية العائم الفاخر (Floating Drawer Trigger)
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(bottom = 86.dp, start = 16.dp)
+                                            .align(Alignment.BottomStart)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFFFFFFF))
+                                            .border(1.5.dp, Color(0x6600A884), CircleShape)
+                                            .size(46.dp)
+                                    ) {
+                                        IconButton(
+                                            onClick = { scope.launch { drawerState.open() } },
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Menu,
+                                                contentDescription = "القائمة الجانبية",
+                                                tint = com.whatsup.automation.presentation.theme.WhatsAppGreen,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
+                    }
+
+                    // درع ونافذة التحديثات الشاملة (Mandatory/Optional Update Engine Shield)
+                    com.whatsup.automation.presentation.screens.update.FullScreenUpdateShield(
+                        viewModel = updateViewModel
+                    )
+
+                    // درع قفل التطبيق بالـ PIN والبصمة
+                    AppLockOverlay(appLockManager = appLockManager)
+
+                    // نافذة ضبط إعدادات القفل
+                    if (showLockSettingsDialog) {
+                        AppLockSettingsDialog(
+                            appLockManager = appLockManager,
+                            onDismiss = { showLockSettingsDialog = false }
+                        )
                     }
                 }
             }

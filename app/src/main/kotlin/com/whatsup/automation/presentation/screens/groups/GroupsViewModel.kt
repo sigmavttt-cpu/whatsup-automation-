@@ -72,11 +72,22 @@ class GroupsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(GroupsUiState())
     val uiState: StateFlow<GroupsUiState> = _uiState.asStateFlow()
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
     private var detailsJob: kotlinx.coroutines.Job? = null
 
     init {
         loadGroups()
         loadDeviceContacts()
+    }
+
+    fun refreshGroups() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            loadDeviceContacts()
+            kotlinx.coroutines.delay(450)
+            _isRefreshing.value = false
+        }
     }
 
     private fun loadGroups() {

@@ -18,6 +18,7 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.whatsup.automation.data.engine.WhatsAppEngine
+import com.whatsup.automation.data.security.SessionKeystore
 import com.whatsup.automation.domain.usecase.ActionResult
 import com.whatsup.automation.domain.model.ConnectionState
 import com.whatsup.automation.domain.usecase.ProcessResult
@@ -59,6 +60,9 @@ class WhatsAppForegroundService : Service() {
     @Inject
     lateinit var serviceHealthMonitor: ServiceHealthMonitor
 
+    @Inject
+    lateinit var sessionKeystore: SessionKeystore
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wakeLock: PowerManager.WakeLock? = null
     private var connectivityManager: ConnectivityManager? = null
@@ -71,6 +75,11 @@ class WhatsAppForegroundService : Service() {
         const val PERMISSION_WARNING_NOTIF_ID = 2002
         const val ACTION_START = "com.whatsup.automation.START_SERVICE"
         const val ACTION_STOP = "com.whatsup.automation.STOP_SERVICE"
+        const val ACTION_PANIC_STOP = "com.whatsup.automation.PANIC_STOP"
+        const val ACTION_UPDATE_STEALTH_MODE = "com.whatsup.automation.UPDATE_STEALTH_MODE"
+
+        @Volatile
+        var isUpdateInstallationInProgress: Boolean = false
 
         fun start(context: Context) {
             val intent = Intent(context, WhatsAppForegroundService::class.java).apply {
@@ -85,6 +94,15 @@ class WhatsAppForegroundService : Service() {
             } catch (e: Exception) {
                 android.util.Log.e("WhatsAppForegroundService", "Failed to start foreground service: ${e.message}", e)
             }
+        }
+
+        fun updateStealthMode(context: Context) {
+            val intent = Intent(context, WhatsAppForegroundService::class.java).apply {
+                action = ACTION_UPDATE_STEALTH_MODE
+            }
+            try {
+                context.startService(intent)
+            } catch (_: Exception) {}
         }
 
         fun stop(context: Context) {
@@ -140,6 +158,23 @@ class WhatsAppForegroundService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_PANIC_STOP -> {
+                whatsAppEngine.setAutomationPaused(true)
+                updateNotification("تم تجميد الأتمتة فورياً بنمط الطوارئ 🚨")
+                com.whatsup.automation.data.service.SystemNotificationHelper.sendSystemNotification(
+                    this,
+                    "زر الطوارئ: تم كتم الأتمتة 🛑",
+                    "تم إيقاف الردود التلقائية وحفظ الأسماء فورياً لسلامة الحساب.",
+                    isError = true
+                )
+                return START_STICKY
+            }
+            ACTION_UPDATE_STEALTH_MODE -> {
+                createNotificationChannel()
+                val isStealth = try { sessionKeystore.isStealthModeEnabled() } catch (_: Exception) { false }
+                updateNotification(if (isStealth) "المحرك نشط في الخلفية (الوضع المتخفي 🔕)" else "محرك الأتمتة قيد التشغيل...")
+                return START_STICKY
+            }
             else -> {
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -165,6 +200,11 @@ class WhatsAppForegroundService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
+        // إذا كان التحديث قيد التثبيت، نكبح إعادة إطلاق الخدمة لتفادي كسر عملية التثبيت
+        if (isUpdateInstallationInProgress) {
+            android.util.Log.i("WhatsAppForegroundService", "onTaskRemoved: Update installation in progress, suppressing restart.")
+            return
+        }
         // إعادة إطلاق الخدمة فوراً عند قيام المستخدم بمسح التطبيق من قائمة التطبيقات الحديثة
         try {
             val restartIntent = Intent(applicationContext, WhatsAppForegroundService::class.java).apply {
@@ -296,6 +336,9 @@ class WhatsAppForegroundService : Service() {
         }
     }
 
+    // ذاكرة مؤقتة لحجز ومنع تكرار مشاهدة أو تفاعل نفس الحالة
+    private val processedStatusActionCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     private fun observeIncomingStatuses() {
         serviceScope.launch {
             whatsAppEngine.incomingStatuses.collect { status ->
@@ -307,28 +350,47 @@ class WhatsAppForegroundService : Service() {
                     val targetParticipant = status.participant ?: status.senderPhone
                     val targetPhone = status.realPhone ?: status.senderPhone
 
-                    // حفظ الحالة في Room
+                    // فحص قاعدة البيانات مسبقاً قبل أي إجراء
+                    val existing = statusRepository.getStatusById(status.id)
+
+                    // حفظ الحالة في Room (مع الحفاظ على حالة المشاهدة والتفاعل السابقة)
                     statusRepository.insertStatus(status)
 
                     val settings = statusRepository.getSettings().first()
 
-                    // التحقق هل صاحب الحالة مسجل في دفتر هاتف الجهاز
+                    // التحقق الصارم: هل صاحب الحالة مسجل في دفتر هاتف الجهاز؟ وهل هو مستثنى من المشاهدة؟
                     val isSenderRegistered = deviceContactsManager.isContactAlreadyRegistered(targetPhone) ||
                             deviceContactsManager.getContactDisplayName(targetPhone) != null
+                    val isMuted = settings.mutedSenders.contains(targetPhone) || existing?.isMuted == true || status.isMuted
 
-                    // المشاهدة التلقائية لجهات الاتصال المسجلة فقط
-                    if (settings.autoViewEnabled && !status.isViewed && isSenderRegistered) {
-                        whatsAppEngine.markStatusViewed(status.id, targetPhone, targetParticipant)
-                        statusRepository.markStatusViewed(status.id)
+                    val isAlreadyViewed = existing?.isViewed == true || status.isViewed
+                    val isAlreadyReacted = existing?.isReacted == true || status.isReacted
+
+                    // 1. المشاهدة التلقائية لجهات الاتصال المسجلة فقط وغير المستثناة
+                    if (settings.autoViewEnabled && !isAlreadyViewed && isSenderRegistered && !isMuted) {
+                        val viewKey = "VIEW_${status.id}"
+                        if (processedStatusActionCache.putIfAbsent(viewKey, System.currentTimeMillis()) == null) {
+                            whatsAppEngine.markStatusViewed(status.id, targetPhone, targetParticipant)
+                            statusRepository.markStatusViewed(status.id)
+                        }
                     }
 
-                    // التفاعل التلقائي لجهات الاتصال المسجلة فقط
-                    if (settings.autoReactEnabled && !status.isReacted && isSenderRegistered) {
-                        // تأخير بشري ذكي (1.5 إلى 3 ثوانٍ) لمحاكاة السلوك الطبيعي ومنع حجب التفاعل
-                        delay(1500L + (Math.random() * 1200).toLong())
-                        val emoji = settings.defaultEmoji.ifBlank { "💚" }
-                        whatsAppEngine.reactToStatus(status.id, emoji, targetPhone, targetParticipant)
-                        statusRepository.reactToStatus(status.id, emoji)
+                    // 2. التفاعل التلقائي لجهات الاتصال المسجلة فقط وغير المستثناة
+                    if (settings.autoReactEnabled && !isAlreadyReacted && isSenderRegistered && !isMuted) {
+                        val reactKey = "REACT_${status.id}"
+                        if (processedStatusActionCache.putIfAbsent(reactKey, System.currentTimeMillis()) == null) {
+                            // تأخير بشري ذكي (1.5 إلى 3 ثوانٍ) لمحاكاة السلوك الطبيعي ومنع حجب التفاعل
+                            delay(1500L + (Math.random() * 1200).toLong())
+                            val emoji = settings.defaultEmoji.ifBlank { "💚" }
+                            whatsAppEngine.reactToStatus(status.id, emoji, targetPhone, targetParticipant)
+                            statusRepository.reactToStatus(status.id, emoji)
+                        }
+                    }
+
+                    // تنظيف دوري لذاكرة الكاش (الحفاظ على آخر 500 إجراء)
+                    if (processedStatusActionCache.size > 500) {
+                        val expireTime = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
+                        processedStatusActionCache.entries.removeIf { it.value < expireTime }
                     }
                 } catch (e: Throwable) {
                     android.util.Log.e("WhatsAppForegroundService", "Error processing status: ${e.message}", e)
@@ -354,8 +416,8 @@ class WhatsAppForegroundService : Service() {
     /**
      * معالجة الحالات الموجودة مسبقاً في Room عند بدء الخدمة:
      * 1. يفحص كل الحالات المحفوظة
-     * 2. الحالات التي لم تُشاهَد → يشاهدها تلقائياً إذا كانت الإعدادات تسمح
-     * 3. عند الاتصال → يطلب جلب الحالات الحالية من واتساب لتحديث القائمة
+     * 2. الحالات التي لم تُشاهَد ولأشخاص مسجلين فقط → يشاهدها ويتفاعل معها
+     * 3. الأشخاص غير المسجلين → لا تُشاهَد ولا يُتفاعل معها نهائياً
      */
     private fun processExistingUnviewedStatuses() {
         serviceScope.launch {
@@ -383,16 +445,32 @@ class WhatsAppForegroundService : Service() {
                     try {
                         val targetParticipant = status.participant ?: status.senderPhone
                         val targetPhone = status.realPhone ?: status.senderPhone
-                        if (settings.autoViewEnabled) {
-                            whatsAppEngine.markStatusViewed(status.id, targetPhone, targetParticipant)
-                            statusRepository.markStatusViewed(status.id)
-                            delay(1200L + (Math.random() * 800).toLong())
+
+                        // فحص تسجيل جهة الاتصال الصارم: لا تشاهد ولا تتفاعل إلا للمسجلين في الهاتف فقط
+                        val isSenderRegistered = deviceContactsManager.isContactAlreadyRegistered(targetPhone) ||
+                                deviceContactsManager.getContactDisplayName(targetPhone) != null
+
+                        val isMuted = settings.mutedSenders.contains(targetPhone) || status.isMuted
+                        if (!isSenderRegistered || isMuted) {
+                            continue
                         }
-                        if (settings.autoReactEnabled) {
-                            val emoji = settings.defaultEmoji.ifBlank { "💚" }
-                            whatsAppEngine.reactToStatus(status.id, emoji, targetPhone, targetParticipant)
-                            statusRepository.reactToStatus(status.id, emoji)
-                            delay(2000L + (Math.random() * 1000).toLong())
+
+                        if (settings.autoViewEnabled && !status.isViewed) {
+                            val viewKey = "VIEW_${status.id}"
+                            if (processedStatusActionCache.putIfAbsent(viewKey, System.currentTimeMillis()) == null) {
+                                whatsAppEngine.markStatusViewed(status.id, targetPhone, targetParticipant)
+                                statusRepository.markStatusViewed(status.id)
+                                delay(1200L + (Math.random() * 800).toLong())
+                            }
+                        }
+                        if (settings.autoReactEnabled && !status.isReacted) {
+                            val reactKey = "REACT_${status.id}"
+                            if (processedStatusActionCache.putIfAbsent(reactKey, System.currentTimeMillis()) == null) {
+                                val emoji = settings.defaultEmoji.ifBlank { "💚" }
+                                whatsAppEngine.reactToStatus(status.id, emoji, targetPhone, targetParticipant)
+                                statusRepository.reactToStatus(status.id, emoji)
+                                delay(2000L + (Math.random() * 1000).toLong())
+                            }
                         }
                     } catch (e: Exception) {
                         android.util.Log.w("WhatsAppForegroundService",
@@ -458,14 +536,19 @@ class WhatsAppForegroundService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
+            val isStealth = try { sessionKeystore.isStealthModeEnabled() } catch (_: Exception) { false }
+            val channelImportance = if (isStealth) NotificationManager.IMPORTANCE_MIN else NotificationManager.IMPORTANCE_LOW
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "خدمة أتمتة واتساب",
-                NotificationManager.IMPORTANCE_LOW
+                channelImportance
             ).apply {
                 description = "إشعار مستمر يضمن عمل محرك الأتمتة في الخلفية"
-                setShowBadge(false)
+                setShowBadge(!isStealth)
+                if (isStealth) {
+                    lockscreenVisibility = Notification.VISIBILITY_SECRET
+                }
             }
             manager.createNotificationChannel(channel)
 
@@ -557,14 +640,32 @@ class WhatsAppForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("WhatsApp Automation Engine")
+        val panicIntent = Intent(this, WhatsAppForegroundService::class.java).apply {
+            action = ACTION_PANIC_STOP
+        }
+        val panicPendingIntent = PendingIntent.getService(
+            this,
+            1005,
+            panicIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val isStealth = try { sessionKeystore.isStealthModeEnabled() } catch (_: Exception) { false }
+        val priority = if (isStealth) NotificationCompat.PRIORITY_MIN else NotificationCompat.PRIORITY_LOW
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(if (isStealth) "Sigma AutoFlow (Stealth)" else "WhatsApp Automation Engine")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+            .setPriority(priority)
+
+        if (!isStealth) {
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "🚨 إيقاف طوارئ", panicPendingIntent)
+        }
+
+        return builder.build()
     }
 
     private fun updateNotification(statusText: String) {

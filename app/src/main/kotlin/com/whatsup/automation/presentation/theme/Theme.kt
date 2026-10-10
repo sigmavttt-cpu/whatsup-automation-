@@ -1,22 +1,22 @@
 package com.whatsup.automation.presentation.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
+private val LightColorScheme = lightColorScheme(
     primary = WhatsAppGreen,
-    onPrimary = DarkBgPrimary,
-    primaryContainer = WhatsAppGreenDark,
-    onPrimaryContainer = TextPrimary,
-    secondary = CyberCyan,
-    onSecondary = DarkBgPrimary,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE8F5E9),
+    onPrimaryContainer = WhatsAppGreenDark,
+    secondary = WhatsAppGreenDark,
+    onSecondary = Color.White,
     background = DarkBgPrimary,
     onBackground = TextPrimary,
     surface = DarkSurface,
@@ -24,12 +24,11 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = DarkBgSecondary,
     onSurfaceVariant = TextSecondary,
     error = RoseError,
-    onError = TextPrimary
+    onError = Color.White
 )
 
 @Composable
 fun WhatsUpTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val view = LocalView.current
@@ -38,14 +37,17 @@ fun WhatsUpTheme(
             (view.context as? Activity)?.window?.let { window ->
                 window.statusBarColor = DarkBgPrimary.toArgb()
                 window.navigationBarColor = DarkBgPrimary.toArgb()
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = true
+                controller.isAppearanceLightNavigationBars = true
             }
         }
     }
 
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = LightColorScheme,
         typography = Typography,
         content = content
     )
 }
+

@@ -50,8 +50,20 @@ class PairingViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(PairingUiState())
     val uiState: StateFlow<PairingUiState> = _uiState.asStateFlow()
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private var countdownJob: kotlinx.coroutines.Job? = null
+
+    fun refreshConnection(context: Context) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            checkAllPermissions(context)
+            whatsAppEngine.refreshRealConnectionState()
+            kotlinx.coroutines.delay(450)
+            _isRefreshing.value = false
+        }
+    }
 
     init {
         // فحص الصلاحيات عند بدء الشاشة

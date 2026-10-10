@@ -18,21 +18,26 @@ class SessionKeystore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val securePrefs: SharedPreferences = try {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        EncryptedSharedPreferences.create(
-            context,
-            "whatsup_secure_session",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        createEncryptedPrefs(context)
     } catch (e: Throwable) {
-        // Fallback في حالة عدم دعم أجهزة معينة لـ EncryptedSharedPreferences أو فشل Keystore
-        android.util.Log.e("SessionKeystore", "Failed to initialize EncryptedSharedPreferences, falling back to standard SharedPreferences: ${e.message}", e)
-        context.getSharedPreferences("whatsup_secure_session_fallback", Context.MODE_PRIVATE)
+        android.util.Log.e("SessionKeystore", "Failed to initialize EncryptedSharedPreferences: ${e.message}. Attempting recovery.", e)
+        try {
+            // محاولة التعافي الذاتي بحذف الملف التالف إذا أعيد توليد مفتاح التشفير
+            val prefsFile = java.io.File(context.applicationInfo.dataDir, "shared_prefs/whatsup_secure_session.xml")
+            if (prefsFile.exists()) {
+                prefsFile.delete()
+            }
+            createEncryptedPrefs(context)
+        } catch (fatal: Throwable) {
+            android.util.Log.e("SessionKeystore", "CRITICAL: Keystore recovery failed. Enforcing strict Fail-Closed policy: ${fatal.message}", fatal)
+            // مسح أي ملفات fallback غير مشفرة سابقة لمنع تسريب الجلسات
+            val fallbackFile = java.io.File(context.applicationInfo.dataDir, "shared_prefs/whatsup_secure_session_fallback.xml")
+            if (fallbackFile.exists()) {
+                fallbackFile.delete()
+            }
+            // تشغيل مخزن ذاكرة مؤقت محمي غير قابل للكتابة الصريحة على القرص
+            InMemorySecurePreferences()
+        }
     }
 
     companion object {
@@ -41,6 +46,48 @@ class SessionKeystore @Inject constructor(
         private const val KEY_SESSION_DATA = "session_data"
         private const val KEY_PAIRING_CODE = "pairing_code"
         private const val KEY_LAST_CONNECTED = "last_connected"
+        private const val KEY_STEALTH_MODE = "stealth_mode"
+        private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
+        private const val KEY_PIN_HASH = "pin_hash"
+
+        private fun createEncryptedPrefs(context: Context): SharedPreferences {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            return EncryptedSharedPreferences.create(
+                context,
+                "whatsup_secure_session",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+    }
+
+    fun isStealthModeEnabled(): Boolean = securePrefs.getBoolean(KEY_STEALTH_MODE, false)
+
+    fun setStealthModeEnabled(enabled: Boolean) {
+        securePrefs.edit().putBoolean(KEY_STEALTH_MODE, enabled).apply()
+    }
+
+    fun isAppLockEnabled(): Boolean = securePrefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        securePrefs.edit().putBoolean(KEY_APP_LOCK_ENABLED, enabled).apply()
+    }
+
+    fun isBiometricEnabled(): Boolean = securePrefs.getBoolean(KEY_BIOMETRIC_ENABLED, true)
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        securePrefs.edit().putBoolean(KEY_BIOMETRIC_ENABLED, enabled).apply()
+    }
+
+    fun getPinHash(): String? = securePrefs.getString(KEY_PIN_HASH, null)
+
+    fun setPinHash(hash: String?) {
+        securePrefs.edit().putString(KEY_PIN_HASH, hash).apply()
     }
 
     fun isSessionActive(): Boolean = securePrefs.getBoolean(KEY_SESSION_ACTIVE, false)
@@ -77,3 +124,49 @@ class SessionKeystore @Inject constructor(
         securePrefs.edit().clear().apply()
     }
 }
+
+/**
+ * مخزن ذاكرة مؤقت لتطبيق مبدأ Fail-Closed عند تعطل Keystore الجذري.
+ * لا يكتب أي بيانات أو مفاتيح حساسة بصيغة نص واضح على قرص الجهاز.
+ */
+private class InMemorySecurePreferences : SharedPreferences {
+    private val memoryMap = java.util.concurrent.ConcurrentHashMap<String, Any?>()
+
+    override fun getAll(): MutableMap<String, *> = HashMap(memoryMap)
+    override fun getString(key: String?, defValue: String?): String? = memoryMap[key] as? String ?: defValue
+    override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? =
+        @Suppress("UNCHECKED_CAST") (memoryMap[key] as? MutableSet<String>) ?: defValues
+    override fun getInt(key: String?, defValue: Int): Int = memoryMap[key] as? Int ?: defValue
+    override fun getLong(key: String?, defValue: Long): Long = memoryMap[key] as? Long ?: defValue
+    override fun getFloat(key: String?, defValue: Float): Float = memoryMap[key] as? Float ?: defValue
+    override fun getBoolean(key: String?, defValue: Boolean): Boolean = memoryMap[key] as? Boolean ?: defValue
+    override fun contains(key: String?): Boolean = memoryMap.containsKey(key)
+    override fun edit(): SharedPreferences.Editor = EditorImpl()
+    override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+    override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+
+    private inner class EditorImpl : SharedPreferences.Editor {
+        private val tempMap = HashMap<String, Any?>()
+        private var clear = false
+
+        override fun putString(key: String?, value: String?): SharedPreferences.Editor = apply { tempMap[key ?: ""] = value }
+        override fun putStringSet(key: String?, values: MutableSet<String>?): SharedPreferences.Editor = apply { tempMap[key ?: ""] = values }
+        override fun putInt(key: String?, value: Int): SharedPreferences.Editor = apply { tempMap[key ?: ""] = value }
+        override fun putLong(key: String?, value: Long): SharedPreferences.Editor = apply { tempMap[key ?: ""] = value }
+        override fun putFloat(key: String?, value: Float): SharedPreferences.Editor = apply { tempMap[key ?: ""] = value }
+        override fun putBoolean(key: String?, value: Boolean): SharedPreferences.Editor = apply { tempMap[key ?: ""] = value }
+        override fun remove(key: String?): SharedPreferences.Editor = apply { tempMap[key ?: ""] = null }
+        override fun clear(): SharedPreferences.Editor = apply { clear = true }
+        override fun commit(): Boolean {
+            apply()
+            return true
+        }
+        override fun apply() {
+            if (clear) memoryMap.clear()
+            tempMap.forEach { (k, v) ->
+                if (v == null) memoryMap.remove(k) else memoryMap[k] = v
+            }
+        }
+    }
+}
+

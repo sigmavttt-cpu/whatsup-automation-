@@ -27,6 +27,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -43,7 +44,11 @@ fun ChatsHubScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val haptic = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val pullToRefreshState = rememberPullToRefreshState()
+    var showDeletedDialog by remember { mutableStateOf(false) }
+    var showMediaDialog by remember { mutableStateOf(false) }
+    var selectedMediaItem by remember { mutableStateOf<com.whatsup.automation.domain.model.VaultItem?>(null) }
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
@@ -128,14 +133,118 @@ fun ChatsHubScreen(
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = GlassFill,
-                unfocusedContainerColor = GlassFill,
+                focusedContainerColor = Color(0xFFFFFFFF),
+                unfocusedContainerColor = Color(0xFFFFFFFF),
                 focusedBorderColor = WhatsAppGreen,
-                unfocusedBorderColor = GlassBorder,
+                unfocusedBorderColor = Color(0x3300A884),
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary
             )
         )
+
+        // بطاقة 1: الرسائل المحذوفة لدى الجميع (Anti-Delete)
+        BentoCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            borderBrush = ObsidianGlowBorder.Cyan
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFE11D48).copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.DeleteSweep,
+                            contentDescription = null,
+                            tint = Color(0xFFE11D48),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "الرسائل المحذوفة لدى الجميع 🗑️",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "${uiState.deletedCount} رسائل مسترجعة تلقائياً",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                }
+                if (uiState.deletedCount > 0) {
+                    TextButton(onClick = { showDeletedDialog = true }) {
+                        Text("عرض الكل", fontSize = 11.5.sp, color = CyberCyan, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // بطاقة 2: الخزينة ووسائط العرض لمرة واحدة (Media Vault)
+        BentoCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 14.dp),
+            borderBrush = ObsidianGlowBorder.Emerald
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(WhatsAppGreen.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = null,
+                            tint = WhatsAppGreen,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "الخزينة ووسائط العرض لمرة واحدة 🔒",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "${uiState.vaultMediaCount} وسائط محفوظة ومحمية",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                }
+                if (uiState.vaultMediaCount > 0) {
+                    TextButton(onClick = { showMediaDialog = true }) {
+                        Text("استعراض", fontSize = 11.5.sp, color = WhatsAppGreen, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
 
         // شريط التبويبات الفرعية الثلاثة مع العدادات الحية
         LazyRow(
@@ -153,14 +262,14 @@ fun ChatsHubScreen(
             items(tabs) { (tab, count, color) ->
                 val isSelected = uiState.selectedTab == tab
                 val bgTint by animateColorAsState(
-                    targetValue = if (isSelected) color.copy(alpha = 0.18f) else GlassFill,
+                    targetValue = if (isSelected) color.copy(alpha = 0.14f) else Color(0xFFFFFFFF),
                     animationSpec = tween(200),
                     label = "tabBg"
                 )
                 val borderBrush = if (isSelected) {
-                    Brush.horizontalGradient(listOf(color, color.copy(alpha = 0.5f)))
+                    Brush.horizontalGradient(listOf(color, color.copy(alpha = 0.6f)))
                 } else {
-                    Brush.horizontalGradient(listOf(GlassBorder, GlassBorder))
+                    Brush.horizontalGradient(listOf(Color(0x2200A884), Color(0x2200A884)))
                 }
 
                 Box(
@@ -192,14 +301,14 @@ fun ChatsHubScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) color else Color(0x33FFFFFF))
+                                .background(if (isSelected) color else Color(0x1A00A884))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = count.toString(),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.Black else TextPrimary
+                                color = if (isSelected) Color.White else TextPrimary
                             )
                         }
                     }
@@ -301,6 +410,246 @@ fun ChatsHubScreen(
             }
         }
     }
+
+    // نافذة استعراض كافة الرسائل المحذوفة
+    if (showDeletedDialog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showDeletedDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BentoCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f),
+                    borderBrush = ObsidianGlowBorder.Cyan
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "الرسائل المحذوفة لدى الجميع 🗑️",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            IconButton(onClick = { showDeletedDialog = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = TextMuted)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (uiState.deletedMessages.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("لا توجد رسائل محذوفة حالياً 🟢", color = TextSecondary, fontSize = 13.sp)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(uiState.deletedMessages) { item ->
+                                    BentoCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        borderBrush = ObsidianGlowBorder.Amber
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = item.senderName.ifBlank { item.senderPhone },
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextPrimary
+                                                )
+                                                Text(
+                                                    text = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(item.timestamp)),
+                                                    fontSize = 11.sp,
+                                                    color = TextMuted
+                                                )
+                                            }
+                                            Text(
+                                                text = item.originalText ?: "رسالة محذوفة",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFFE11D48)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // نافذة استعراض وسائط الخزينة والعرض لمرة واحدة
+    if (showMediaDialog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showMediaDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BentoCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f),
+                    borderBrush = ObsidianGlowBorder.Emerald
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "وسائط الخزينة والعرض لمرة واحدة 🔒",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            IconButton(onClick = { showMediaDialog = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = TextMuted)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (uiState.vaultMediaItems.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("لا توجد وسائط محفوظة حالياً 🔒", color = TextSecondary, fontSize = 13.sp)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(uiState.vaultMediaItems) { item ->
+                                    BentoCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        borderBrush = ObsidianGlowBorder.Emerald
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(10.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(WhatsAppGreen.copy(alpha = 0.15f)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = when (item.mediaType) {
+                                                            com.whatsup.automation.domain.model.VaultMediaType.IMAGE -> Icons.Default.Image
+                                                            com.whatsup.automation.domain.model.VaultMediaType.VIDEO -> Icons.Default.Videocam
+                                                            com.whatsup.automation.domain.model.VaultMediaType.AUDIO -> Icons.Default.Mic
+                                                            else -> Icons.Default.InsertDriveFile
+                                                        },
+                                                        contentDescription = null,
+                                                        tint = WhatsAppGreen,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = item.senderName.ifBlank { item.senderPhone },
+                                                        fontSize = 13.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = TextPrimary
+                                                    )
+                                                    Text(
+                                                        text = "عرض لمرة واحدة • ${java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(item.timestamp))}",
+                                                        fontSize = 10.5.sp,
+                                                        color = TextMuted
+                                                    )
+                                                }
+                                            }
+
+                                            if (!item.localFilePath.isNullOrBlank()) {
+                                                Button(
+                                                    onClick = {
+                                                        val file = java.io.File(item.localFilePath)
+                                                        if (file.exists()) {
+                                                            try {
+                                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                                        context,
+                                                                        "${context.packageName}.fileprovider",
+                                                                        file
+                                                                    )
+                                                                    setDataAndType(uri, item.mimeType ?: "image/*")
+                                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                }
+                                                                context.startActivity(intent)
+                                                            } catch (_: Exception) {}
+                                                        }
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                                ) {
+                                                    Text("فتح 👁️", fontSize = 11.sp, color = DarkBgPrimary, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 }
 
@@ -386,13 +735,13 @@ private fun UnregisteredCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0x22000000))
+                        .background(Color(0xFFF1F5F9))
                         .padding(10.dp)
                 ) {
                     Text(
                         text = item.lastMessage,
                         fontSize = 13.sp,
-                        color = TextSecondary,
+                        color = TextPrimary,
                         maxLines = 3
                     )
                 }
@@ -417,14 +766,14 @@ private fun UnregisteredCard(
                     Icon(
                         imageVector = Icons.Default.Chat,
                         contentDescription = null,
-                        tint = Color.Black,
+                        tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = "الدخول للمحادثة في واتساب",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = Color.White
                     )
                 }
             }
@@ -473,18 +822,22 @@ private fun RegisteredAllCard(
                     )
                 }
 
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = item.name,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = item.phone,
                         fontSize = 12.sp,
                         color = TextMuted,
-                        style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
+                        style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
