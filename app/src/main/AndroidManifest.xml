@@ -36,6 +36,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Crash Report Activity — Isolated emergency developer diagnostic activity -->
+        <activity
+            android:name=".presentation.screens.diagnostics.CrashReportActivity"
+            android:exported="false"
+            android:process=":crash_handler"
+            android:theme="@style/Theme.WhatsUpAutomation" />
+
         <!-- Foreground Service -->
         <service
             android:name=".service.WhatsAppForegroundService"

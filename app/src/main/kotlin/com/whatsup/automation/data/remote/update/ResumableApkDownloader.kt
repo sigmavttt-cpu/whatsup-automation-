@@ -29,7 +29,7 @@ class ResumableApkDownloader @Inject constructor() {
 
     companion object {
         private const val TAG = "ResumableApkDownloader"
-        private const val BUFFER_SIZE = 64 * 1024 // 64 KB chunk size
+        private const val BUFFER_SIZE = 128 * 1024 // 128 KB High-Performance Stream Buffer
         private const val SPEED_SAMPLE_INTERVAL_MS = 300L
     }
 
@@ -159,7 +159,8 @@ class ResumableApkDownloader @Inject constructor() {
                 randomAccessFile.seek(0)
             }
 
-            val inputStream = connection!!.inputStream
+            val rawStream = connection!!.inputStream
+            val inputStream = java.io.BufferedInputStream(rawStream, BUFFER_SIZE)
             val buffer = ByteArray(BUFFER_SIZE)
             var bytesDownloaded = existingLength
             var lastSampleTime = System.currentTimeMillis()

@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.*
 import java.net.Socket
+import com.whatsup.automation.data.security.LicenseManager
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +24,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class BaileysBridgeManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val licenseManager: LicenseManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val commandMutex = Mutex()
@@ -57,6 +59,10 @@ class BaileysBridgeManager @Inject constructor(
      */
     fun start() {
         if (isRunning) return
+        if (!licenseManager.isSubscriptionActive()) {
+            Log.w(TAG, "Cannot start Baileys bridge: subscription is inactive or expired!")
+            return
+        }
         isRunning = true
 
         scope.launch {
@@ -182,6 +188,10 @@ class BaileysBridgeManager @Inject constructor(
      * إرسال أمر JSON إلى محرك Baileys
      */
     suspend fun sendCommand(command: JSONObject): Boolean = commandMutex.withLock {
+        if (!licenseManager.isSubscriptionActive()) {
+            Log.w(TAG, "Command rejected: subscription is inactive or expired!")
+            return@withLock false
+        }
         val payload = command.toString()
         return withContext(Dispatchers.IO) {
             try {

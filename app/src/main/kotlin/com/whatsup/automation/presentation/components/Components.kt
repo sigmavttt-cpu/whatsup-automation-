@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -33,12 +36,12 @@ import com.whatsup.automation.domain.model.ConnectionState
 import com.whatsup.automation.presentation.theme.*
 
 /**
- * بطاقة بنتو زجاجية عصرية ثلاثية الأبعاد (Bento Glass Card) مع حركة ارتدادية عند الضغط (Spring Scale).
+ * بطاقة بنتو زجاجية عصرية ثلاثية الأبعاد (Bento Glass Card) بهيكل منحني فاخر وحواف متوهجة.
  */
 @Composable
 fun BentoCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 22.dp,
+    cornerRadius: Dp = 24.dp,
     borderBrush: Brush = ObsidianGlowBorder.Emerald,
     backgroundColor: Color = DarkSurface,
     onClick: (() -> Unit)? = null,
@@ -57,8 +60,12 @@ fun BentoCard(
         modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(cornerRadius))
-            .background(backgroundColor.copy(alpha = 0.85f))
-            .border(1.dp, borderBrush, RoundedCornerShape(cornerRadius))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(backgroundColor, backgroundColor.copy(alpha = 0.95f))
+                )
+            )
+            .border(1.5.dp, borderBrush, RoundedCornerShape(cornerRadius))
             .then(
                 if (onClick != null) {
                     Modifier.clickable(
@@ -71,6 +78,27 @@ fun BentoCard(
                     )
                 } else Modifier
             )
+            .padding(20.dp)
+    ) {
+        Column(content = content)
+    }
+}
+
+/**
+ * بطاقة زجاجية فاخرة (Glassmorphic Card) بهيكل جديد عالي الأناقة وحواف سيان متوهجة.
+ */
+@Composable
+fun GlassmorphicCard(
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 24.dp,
+    borderBrush: Brush = ObsidianGlowBorder.Cyan,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Color(0xFFFFFFFF))
+            .border(1.5.dp, borderBrush, RoundedCornerShape(cornerRadius))
             .padding(18.dp)
     ) {
         Column(content = content)
@@ -78,25 +106,46 @@ fun BentoCard(
 }
 
 /**
- * بطاقة زجاجية فاخرة (Glassmorphic Card) مع حواف متدرجة وشبه شفافة.
+ * شارة علامة الصح الفاخرة ذات التوهج النيوني (Luxury Neon Checkmark Badge).
  */
 @Composable
-fun GlassmorphicCard(
+fun LuxuryCheckmarkBadge(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
-    borderBrush: Brush = Brush.linearGradient(
-        colors = listOf(Color(0x3300A884), Color(0x1000A884))
-    ),
-    content: @Composable ColumnScope.() -> Unit
+    text: String? = null,
+    isVerified: Boolean = true,
+    accentColor: Color = CheckmarkGreen
 ) {
-    Box(
+    Row(
         modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(Color(0xFFFFFFFF))
-            .border(1.dp, borderBrush, RoundedCornerShape(cornerRadius))
-            .padding(16.dp)
+            .clip(RoundedCornerShape(50.dp))
+            .background(accentColor.copy(alpha = 0.14f))
+            .border(1.5.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(50.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Column(content = content)
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(accentColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isVerified) Icons.Filled.Check else Icons.Filled.Close,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(12.dp)
+            )
+        }
+        if (!text.isNullOrBlank()) {
+            Text(
+                text = text,
+                color = accentColor,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 

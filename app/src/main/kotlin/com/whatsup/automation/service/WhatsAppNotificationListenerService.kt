@@ -43,6 +43,9 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
     @Inject
     lateinit var deviceContactsManager: DeviceContactsManager
 
+    @Inject
+    lateinit var licenseManager: com.whatsup.automation.data.security.LicenseManager
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     companion object {
@@ -64,7 +67,7 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        if (whatsAppEngine.isAutomationPaused.value) return
+        if (whatsAppEngine.isAutomationPaused.value || !licenseManager.isSubscriptionActive()) return
 
         val pkg = sbn.packageName ?: return
         if (pkg != WHATSAPP_PKG && pkg != WHATSAPP_BIZ_PKG) return

@@ -63,6 +63,9 @@ class WhatsAppForegroundService : Service() {
     @Inject
     lateinit var sessionKeystore: SessionKeystore
 
+    @Inject
+    lateinit var licenseManager: com.whatsup.automation.data.security.LicenseManager
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wakeLock: PowerManager.WakeLock? = null
     private var connectivityManager: ConnectivityManager? = null
@@ -142,6 +145,7 @@ class WhatsAppForegroundService : Service() {
         createNotificationChannel()
         acquireWakeLock()
         setupNetworkMonitoring()
+        observeLicenseState()
         observeConnectionState()
         observeIncomingMessages()
         observeIncomingStatuses()
@@ -233,6 +237,31 @@ class WhatsAppForegroundService : Service() {
         serviceScope.cancel()
     }
 
+    private fun observeLicenseState() {
+        serviceScope.launch {
+            licenseManager.licenseState.collectLatest { state ->
+                when (state) {
+                    is com.whatsup.automation.data.security.LicenseState.Expired -> {
+                        whatsAppEngine.setAutomationPaused(true)
+                        updateNotification("انتهت فترة اشتراك التطبيق — يرجى التواصل للتجديد ⚠️")
+                    }
+                    is com.whatsup.automation.data.security.LicenseState.Blocked -> {
+                        whatsAppEngine.setAutomationPaused(true)
+                        updateNotification("تم حظر الاشتراك من قبل الإدارة 🚫")
+                    }
+                    is com.whatsup.automation.data.security.LicenseState.NotActivated -> {
+                        whatsAppEngine.setAutomationPaused(true)
+                        updateNotification("التطبيق بانتظار التفعيل — أدخل كود الاشتراك 🔑")
+                    }
+                    is com.whatsup.automation.data.security.LicenseState.Active -> {
+                        whatsAppEngine.setAutomationPaused(false)
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
     private fun observeConnectionState() {
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(
@@ -260,7 +289,7 @@ class WhatsAppForegroundService : Service() {
         serviceScope.launch {
             whatsAppEngine.incomingMessages.collect { message ->
                 try {
-                    if (whatsAppEngine.isAutomationPaused.value) {
+                    if (whatsAppEngine.isAutomationPaused.value || !licenseManager.isSubscriptionActive()) {
                         return@collect
                     }
 

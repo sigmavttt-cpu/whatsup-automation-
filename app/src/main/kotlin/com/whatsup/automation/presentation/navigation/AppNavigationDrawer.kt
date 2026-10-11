@@ -29,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.whatsup.automation.data.engine.WhatsAppEngine
 import com.whatsup.automation.data.security.AppLockManager
 import com.whatsup.automation.data.security.SessionKeystore
+import com.whatsup.automation.presentation.components.DevDiagnosticsSheet
 import com.whatsup.automation.presentation.theme.*
 import com.whatsup.automation.service.WhatsAppForegroundService
 import kotlinx.coroutines.CoroutineScope
@@ -68,6 +69,7 @@ fun AppNavigationDrawer(
     val connectionState by whatsAppEngine.connectionState.collectAsState()
     val isStealthMode = remember { mutableStateOf(sessionKeystore.isStealthModeEnabled()) }
     val isAppLocked = remember { mutableStateOf(appLockManager.isLockEnabled()) }
+    var showDevDiagnostics by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     ModalDrawerSheet(
@@ -164,6 +166,41 @@ fun AppNavigationDrawer(
                     ) {
                         Text(text = statusText, color = badgeColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(badgeColor))
+                    }
+
+                    // شارة حالة الاشتراك والترخيص
+                    val licenseStatus = sessionKeystore.getLicenseStatus()
+                    val licenseExpiresAt = sessionKeystore.getLicenseExpiresAt()
+                    val now = System.currentTimeMillis()
+                    val remainingDays = if (licenseExpiresAt > now) {
+                        ((licenseExpiresAt - now) / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+                    } else 0
+
+                    if (licenseStatus == "ACTIVE") {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFF0FDF4))
+                                .border(1.dp, Color(0xFF86EFAC), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "الاشتراك نشط (متبقي $remainingDays يوماً) 🛡️",
+                                color = Color(0xFF15803D),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                tint = Color(0xFF16A34A),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -287,6 +324,20 @@ fun AppNavigationDrawer(
                 }
             )
 
+            // لوحة تشخيص المطور المحلية وفاحص الواجهات الذكي
+            DrawerNavRow(
+                title = "تشخيص المطور والواجهات 🛠️",
+                subtitle = "فاحص الواجهات الذكي وسجلات الانهيار والـ ANR محلياً",
+                icon = Icons.Default.BugReport,
+                badge = "Dev",
+                badgeColor = Color(0xFF6366F1),
+                isSelected = false,
+                onClick = {
+                    scope.launch { drawerState.close() }
+                    showDevDiagnostics = true
+                }
+            )
+
             Spacer(modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -317,6 +368,10 @@ fun AppNavigationDrawer(
                 }
             }
         }
+    }
+
+    if (showDevDiagnostics) {
+        DevDiagnosticsSheet(onDismiss = { showDevDiagnostics = false })
     }
 }
 

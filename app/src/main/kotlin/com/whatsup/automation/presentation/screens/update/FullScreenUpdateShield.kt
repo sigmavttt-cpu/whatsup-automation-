@@ -244,7 +244,7 @@ private fun MandatoryUpdateShieldContent(
 }
 
 /**
- * نافذة حوار التحديث الاختياري — يمكن للمستخدم تأجيلها أو التحديث فوراً.
+ * نافذة حوار التحديث الاختياري — تصميم مستطيل مباشر: عنوان "تحديث جديد" وتحته زر "تحديث".
  */
 @Composable
 private fun OptionalUpdateDialog(
@@ -260,79 +260,91 @@ private fun OptionalUpdateDialog(
         BentoCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
+                .padding(horizontal = 8.dp),
+            cornerRadius = 20.dp,
             borderBrush = ObsidianGlowBorder.Emerald
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(WhatsAppGreen.copy(alpha = 0.15f))
-                        .border(1.5.dp, WhatsAppGreen.copy(alpha = 0.5f), CircleShape),
-                    contentAlignment = Alignment.Center
+                // ترويسة مباشرة: "تحديث جديد" وشارة الإصدار
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.SystemUpdate,
-                        contentDescription = null,
-                        tint = WhatsAppGreen,
-                        modifier = Modifier.size(34.dp)
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "تحديث جديد ✨",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "الحجم: ${updateInfo.getFormattedSize()} • إصدارك: $currentVersionName",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(WhatsAppGreen.copy(alpha = 0.15f))
+                            .border(1.dp, WhatsAppGreen.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "v${updateInfo.versionName}",
+                            color = WhatsAppGreenDark,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
-                UpdateTypeBadge(type = updateInfo.updateType)
+                HorizontalDivider(color = GlassBorderSubtle, thickness = 1.dp)
 
-                Text(
-                    text = updateInfo.titleAr.ifBlank { "إصدار جديد متوفر ✨" },
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    textAlign = TextAlign.Center
-                )
-
-                VersionCompareBadge(
-                    currentVersion = currentVersionName,
-                    newVersion = updateInfo.versionName,
-                    fileSize = updateInfo.getFormattedSize()
-                )
-
+                // سجل التغييرات المختصر
                 ChangelogBox(
                     changelog = updateInfo.changelogAr,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Row(
+                // زر "تحديث" المباشر تحته تماماً
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        .padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        border = ButtonDefaults.outlinedButtonBorder.copy(brush = Brush.horizontalGradient(listOf(Color(0x30FFFFFF), Color(0x30FFFFFF))))
-                    ) {
-                        Text("لاحقاً", color = TextSecondary, fontSize = 13.5.sp)
-                    }
-
                     Button(
                         onClick = onStartDownload,
                         modifier = Modifier
-                            .weight(1.5f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen)
                     ) {
-                        Text("تحديث الآن ⚡", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.5.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Filled.Bolt, contentDescription = null, tint = Color.White)
+                            Text("تحديث ⚡", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = ButtonDefaults.outlinedButtonBorder.copy(brush = Brush.horizontalGradient(listOf(Color(0x30FFFFFF), Color(0x30FFFFFF))))
+                    ) {
+                        Text("لاحقاً", color = TextSecondary, fontSize = 13.sp)
                     }
                 }
             }
@@ -341,7 +353,7 @@ private fun OptionalUpdateDialog(
 }
 
 /**
- * شاشة تدفق تقدم التنزيل القطاعي المباشر.
+ * نافذة منبثقة مستطيلة لتنزيل التحديث بأقصى سرعة وبروتوكول متدفق مباشر.
  */
 @Composable
 private fun DownloadProgressContent(
@@ -358,96 +370,105 @@ private fun DownloadProgressContent(
         label = "DownloadProgress"
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBgPrimary.copy(alpha = 0.95f))
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
+    val downloadedMb = state.bytesDownloaded / (1024.0 * 1024.0)
+    val totalMb = state.totalBytes / (1024.0 * 1024.0)
+    val speedKb = state.speedBytesPerSec / 1024.0
+    val speedMb = speedKb / 1024.0
+    val speedText = if (speedMb >= 1.0) String.format(java.util.Locale.US, "%.2f MB/s", speedMb) else String.format(java.util.Locale.US, "%.0f KB/s", speedKb)
+
+    Dialog(
+        onDismissRequest = { /* Block dismiss */ },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
         BentoCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            cornerRadius = 20.dp,
             borderBrush = ObsidianGlowBorder.Cyan
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.CloudDownload,
-                    contentDescription = null,
-                    tint = CyberCyan,
-                    modifier = Modifier.size(50.dp)
-                )
-
-                Text(
-                    text = "جارٍ تنزيل التحديث (${state.updateInfo.versionName})...",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-
-                // شريط التقدم الرئيسي
-                Column(
+                // ترويسة التنزيل السريع
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CloudDownload,
+                            contentDescription = null,
+                            tint = CyberCyan,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "جارٍ التحميل بأقصى سرعة ⚡",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                    Text(
+                        text = "${(state.progressPercent * 100).toInt()}%",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberCyan
+                    )
+                }
+
+                // شريط التقدم السريع فائق النعومة
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(DarkBgSecondary)
+                        .border(1.dp, GlassBorder, RoundedCornerShape(6.dp))
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(DarkSurfaceElevated)
-                            .border(1.dp, GlassBorder, RoundedCornerShape(8.dp))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(animatedProgress)
-                                .background(LiquidEmeraldGradient)
-                        )
-                    }
+                            .fillMaxHeight()
+                            .fillMaxWidth(animatedProgress)
+                            .background(LiquidEmeraldGradient)
+                    )
+                }
 
-                    // بيانات النسبة والحجم والسرعة والوقت المتبقي
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        val downloadedMb = state.bytesDownloaded / (1024.0 * 1024.0)
-                        val totalMb = state.totalBytes / (1024.0 * 1024.0)
-                        val speedKb = state.speedBytesPerSec / 1024.0
-                        val speedMb = speedKb / 1024.0
-                        val speedText = if (speedMb >= 1.0) String.format(java.util.Locale.US, "%.2f MB/s", speedMb) else String.format(java.util.Locale.US, "%.0f KB/s", speedKb)
+                // إحصائيات الحجم وسرعة التنزيل اللحظية
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = String.format(java.util.Locale.US, "%.1f / %.1f MB", downloadedMb, totalMb),
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
 
-                        Text(
-                            text = String.format(java.util.Locale.US, "%.1f / %.1f MB (%d%%)", downloadedMb, totalMb, (state.progressPercent * 100).toInt()),
-                            fontSize = 12.sp,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
+                    Text(
+                        text = "السرعة: $speedText",
+                        fontSize = 12.sp,
+                        color = WhatsAppGreen,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
-                        Text(
-                            text = "السرعة: $speedText",
-                            fontSize = 12.sp,
-                            color = WhatsAppGreenLight,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    if (state.etaSeconds > 0) {
-                        Text(
-                            text = "الوقت التقديري المتبقي: حوالي ${state.etaSeconds} ثانية",
-                            fontSize = 11.5.sp,
-                            color = TextMuted,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                if (state.etaSeconds > 0) {
+                    Text(
+                        text = "الوقت التقديري: حوالي ${state.etaSeconds} ثانية",
+                        fontSize = 11.sp,
+                        color = TextMuted
+                    )
                 }
 
                 if (!state.updateInfo.mirrorApkUrl.isNullOrBlank()) {
-                    TextButton(onClick = onUseMirror) {
+                    TextButton(onClick = onUseMirror, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text("التبديل إلى الخادم البديل 🔄", color = CyberCyan, fontSize = 12.sp)
                     }
                 }
@@ -506,7 +527,7 @@ private fun VerifyingChecksumContent(state: UpdateUiState.VerifyingChecksum) {
 }
 
 /**
- * شاشة جاهزية التثبيت بعد اكتمال التنزيل وفحص البصمة.
+ * نافذة منبثقة مستطيلة لجاهزية التثبيت بعد اكتمال التنزيل وفحص البصمة.
  */
 @Composable
 private fun ReadyToInstallContent(
@@ -519,83 +540,67 @@ private fun ReadyToInstallContent(
         BackHandler(enabled = true) { /* Block */ }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBgPrimary.copy(alpha = 0.95f))
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
+    Dialog(
+        onDismissRequest = { /* Block dismiss */ },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
         BentoCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            cornerRadius = 20.dp,
             borderBrush = ObsidianGlowBorder.Emerald
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(WhatsAppGreen.copy(alpha = 0.2f))
-                        .border(1.5.dp, WhatsAppGreen, CircleShape),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = null,
-                        tint = WhatsAppGreen,
-                        modifier = Modifier.size(36.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = WhatsAppGreen,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "التحديث جاهز للتثبيت ✅",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                    Text(
+                        text = "v${state.updateInfo.versionName}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WhatsAppGreen
                     )
                 }
 
                 Text(
-                    text = "الحزمة جاهزة للتثبيت بنجاح ✅",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-
-                Text(
-                    text = "تم تنزيل الإصدار ${state.updateInfo.versionName} والتحقق من بصمة SHA-256.",
-                    fontSize = 12.5.sp,
+                    text = "اكتمل التنزيل بنجاح وتم فحص البصمة المشفرة SHA-256.",
+                    fontSize = 12.sp,
                     color = TextSecondary,
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 if (!canInstall) {
-                    // تنبيه إذن تثبيت التطبيقات المجهولة
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(AmberWarning.copy(alpha = 0.15f))
-                            .border(1.dp, AmberWarning.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                    Button(
+                        onClick = onRequestPermission,
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberWarning),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "مطلوب إذن تثبيت التطبيقات ⚠️",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AmberWarning
-                            )
-                            Text(
-                                text = "يرجى السماح للتطبيق بتثبيت التحديثات من شاشة إعدادات النظام.",
-                                fontSize = 11.5.sp,
-                                color = TextPrimary
-                            )
-                            Button(
-                                onClick = onRequestPermission,
-                                colors = ButtonDefaults.buttonColors(containerColor = AmberWarning),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("فتح إعدادات الإذن", color = DarkBgPrimary, fontWeight = FontWeight.Bold)
-                            }
-                        }
+                        Text("السماح بتثبيت التطبيقات ⚠️", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -603,8 +608,8 @@ private fun ReadyToInstallContent(
                     onClick = onInstall,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen)
                 ) {
                     Row(
@@ -612,7 +617,7 @@ private fun ReadyToInstallContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Filled.SystemUpdateAlt, contentDescription = null, tint = Color.White)
-                        Text("بدء تثبيت التحديث 🚀", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                        Text("تثبيت التحديث الآن 🚀", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
                     }
                 }
             }

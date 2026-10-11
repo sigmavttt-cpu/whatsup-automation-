@@ -50,6 +50,12 @@ class SessionKeystore @Inject constructor(
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
         private const val KEY_PIN_HASH = "pin_hash"
+        private const val KEY_LICENSE_KEY = "license_key"
+        private const val KEY_LICENSE_STATUS = "license_status"
+        private const val KEY_LICENSE_EXPIRES_AT = "license_expires_at"
+        private const val KEY_LAST_LICENSE_VERIFIED_AT = "last_license_verified_at"
+        private const val KEY_DEVICE_FINGERPRINT = "device_fingerprint"
+
 
         private fun createEncryptedPrefs(context: Context): SharedPreferences {
             val masterKey = MasterKey.Builder(context)
@@ -119,6 +125,41 @@ class SessionKeystore @Inject constructor(
     }
 
     fun getLastConnectedTimestamp(): Long = securePrefs.getLong(KEY_LAST_CONNECTED, 0L)
+
+    // --- إدارة التراخيص والاشتراكات المشفرة عتادياً ---
+    fun getLicenseKey(): String? = securePrefs.getString(KEY_LICENSE_KEY, null)
+    fun setLicenseKey(key: String?) {
+        securePrefs.edit().putString(KEY_LICENSE_KEY, key?.trim()?.uppercase()).apply()
+    }
+
+    fun getLicenseStatus(): String = securePrefs.getString(KEY_LICENSE_STATUS, "NOT_ACTIVATED") ?: "NOT_ACTIVATED"
+    fun setLicenseStatus(status: String) {
+        securePrefs.edit().putString(KEY_LICENSE_STATUS, status).apply()
+    }
+
+    fun getLicenseExpiresAt(): Long = securePrefs.getLong(KEY_LICENSE_EXPIRES_AT, 0L)
+    fun setLicenseExpiresAt(timestamp: Long) {
+        securePrefs.edit().putLong(KEY_LICENSE_EXPIRES_AT, timestamp).apply()
+    }
+
+    fun getLastLicenseVerifiedAt(): Long = securePrefs.getLong(KEY_LAST_LICENSE_VERIFIED_AT, 0L)
+    fun setLastLicenseVerifiedAt(timestamp: Long) {
+        securePrefs.edit().putLong(KEY_LAST_LICENSE_VERIFIED_AT, timestamp).apply()
+    }
+
+    fun getDeviceFingerprint(): String? = securePrefs.getString(KEY_DEVICE_FINGERPRINT, null)
+    fun setDeviceFingerprint(fingerprint: String?) {
+        securePrefs.edit().putString(KEY_DEVICE_FINGERPRINT, fingerprint).apply()
+    }
+
+    fun clearLicense() {
+        securePrefs.edit()
+            .remove(KEY_LICENSE_KEY)
+            .remove(KEY_LICENSE_STATUS)
+            .remove(KEY_LICENSE_EXPIRES_AT)
+            .remove(KEY_LAST_LICENSE_VERIFIED_AT)
+            .apply()
+    }
 
     fun clearSession() {
         securePrefs.edit().clear().apply()

@@ -76,6 +76,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -160,9 +161,12 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val updateViewModel: com.whatsup.automation.presentation.screens.update.UpdateViewModel = hiltViewModel()
+                    val activationViewModel: com.whatsup.automation.presentation.screens.activation.ActivationViewModel = hiltViewModel()
+                    val licenseState by activationViewModel.licenseState.collectAsState()
 
                     LaunchedEffect(Unit) {
                         updateViewModel.checkForUpdates(isManual = false)
+                        activationViewModel.refreshStatus()
                     }
 
                     val navController = rememberNavController()
@@ -333,6 +337,16 @@ class MainActivity : ComponentActivity() {
 
                     // درع قفل التطبيق بالـ PIN والبصمة
                     AppLockOverlay(appLockManager = appLockManager)
+
+                    // درع تفعيل الاشتراك والترخيص المقاوم للكراك
+                    if (licenseState is com.whatsup.automation.data.security.LicenseState.NotActivated ||
+                        licenseState is com.whatsup.automation.data.security.LicenseState.Expired ||
+                        licenseState is com.whatsup.automation.data.security.LicenseState.Blocked
+                    ) {
+                        com.whatsup.automation.presentation.screens.activation.ActivationScreen(
+                            viewModel = activationViewModel
+                        )
+                    }
 
                     // نافذة ضبط إعدادات القفل
                     if (showLockSettingsDialog) {
