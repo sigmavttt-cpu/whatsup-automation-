@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -173,9 +174,25 @@ fun LiquidGradientButton(
     Box(
         modifier = modifier
             .scale(scale)
+            .shadow(
+                elevation = if (enabled) 6.dp else 0.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = Color(0x3300C853)
+            )
             .clip(RoundedCornerShape(16.dp))
             .background(
                 if (enabled) gradient else Brush.linearGradient(listOf(DarkSurfaceHover, DarkSurfaceHover))
+            )
+            .border(
+                width = 1.2.dp,
+                brush = Brush.horizontalGradient(
+                    listOf(
+                        Color(0x80FFFFFF),
+                        Color(0x3300E676),
+                        Color(0x1AFFFFFF)
+                    )
+                ),
+                shape = RoundedCornerShape(16.dp)
             )
             .clickable(
                 enabled = enabled,
@@ -204,6 +221,70 @@ fun LiquidGradientButton(
             Text(
                 text = text,
                 color = if (enabled) Color.White else TextMuted,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.5.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * زر محدد بإطار فاخر نيون ومظهر زجاجي شفاف (Luxury Outlined Button).
+ */
+@Composable
+fun LuxuryOutlinedButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+    borderBrush: Brush = ObsidianGlowBorder.Emerald,
+    textColor: Color = WhatsAppGreenDark
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "btnOutlinedScale"
+    )
+    val haptic = LocalHapticFeedback.current
+
+    Box(
+        modifier = modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFFFFFFFF))
+            .border(1.5.dp, borderBrush, RoundedCornerShape(16.dp))
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                }
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (enabled) textColor else TextMuted,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Text(
+                text = text,
+                color = if (enabled) textColor else TextMuted,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.5.sp,
                 maxLines = 1,

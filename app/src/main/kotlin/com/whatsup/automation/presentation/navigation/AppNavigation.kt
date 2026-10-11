@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -89,13 +90,12 @@ val bottomNavItems = listOf(
     Screen.Dashboard,
     Screen.ChatsHub,
     Screen.Automation,
-    Screen.Statuses,
-    Screen.System,
-    Screen.Analytics
+    Screen.System
 )
 
 /**
- * شريط تنقل سفلي عائم بتصميم White Emerald Glass والمؤشرات الحية.
+ * شريط تنقل سفلي عائم فخم (Luxury Floating Capsule Bar).
+ * يعتمد 4 محاور كبرى بمساحات لمس عريضة فسيحة مع حواف زمردية متوهجة وتأثيرات ارتدادية فاخرة.
  */
 @Composable
 fun ModernBottomNavBar(
@@ -110,26 +110,32 @@ fun ModernBottomNavBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .shadow(
+                    elevation = 16.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    ambientColor = Color(0x1F00C853),
+                    spotColor = Color(0x3300C853)
+                )
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color(0xFFFFFFFF))
                 .border(
-                    width = 1.dp,
+                    width = 1.5.dp,
                     brush = Brush.horizontalGradient(
                         listOf(
-                            Color(0x3300A884),
-                            Color(0x6600A884),
-                            Color(0x3300A884)
+                            Color(0x3300C853),
+                            Color(0x9900E676),
+                            Color(0x3300C853)
                         )
                     ),
                     shape = RoundedCornerShape(28.dp)
                 )
-                .padding(vertical = 6.dp, horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .padding(horizontal = 8.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             bottomNavItems.forEach { screen ->
@@ -140,22 +146,37 @@ fun ModernBottomNavBar(
                     label = "tabScale"
                 )
                 val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) WhatsAppGreen else TextSecondary,
-                    animationSpec = tween(250),
+                    targetValue = if (isSelected) WhatsAppGreenDark else TextSecondary,
+                    animationSpec = tween(220),
                     label = "iconTint"
                 )
-                val bgPillColor by animateColorAsState(
-                    targetValue = if (isSelected) WhatsAppGreen.copy(alpha = 0.12f) else Color.Transparent,
-                    animationSpec = tween(250),
-                    label = "bgPill"
-                )
+                val bgPillBrush = if (isSelected) {
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0x1F00C853),
+                            Color(0x0A00C853)
+                        )
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.Transparent
+                        )
+                    )
+                }
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .scale(scale)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(bgPillColor)
+                        .background(bgPillBrush)
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(1.dp, Color(0x3300C853), RoundedCornerShape(20.dp))
+                            } else Modifier
+                        )
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -171,33 +192,33 @@ fun ModernBottomNavBar(
                                 }
                             }
                         }
-                        .padding(vertical = 5.dp, horizontal = 1.dp),
+                        .padding(vertical = 7.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(1.5.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Icon(
                             imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                             contentDescription = screen.title,
                             tint = iconTint,
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(22.dp)
                         )
 
                         Text(
                             text = screen.title,
-                            fontSize = 9.5.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = iconTint,
                             maxLines = 1
                         )
 
-                        // نقطة زمردية سفلية نشطة
+                        // مؤشر كبسولي نشط متوهج
                         Box(
                             modifier = Modifier
-                                .size(if (isSelected) 4.dp else 0.dp)
-                                .clip(CircleShape)
+                                .size(width = if (isSelected) 14.dp else 0.dp, height = if (isSelected) 3.dp else 0.dp)
+                                .clip(RoundedCornerShape(2.dp))
                                 .background(if (isSelected) WhatsAppGreen else Color.Transparent)
                         )
                     }

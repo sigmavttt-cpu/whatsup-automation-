@@ -37,8 +37,9 @@ import com.whatsup.automation.presentation.screens.statuses.StatusesViewModel
 import com.whatsup.automation.presentation.theme.*
 
 enum class AutomationTab(val title: String, val icon: ImageVector) {
-    RULES("قواعد التسجيل والردود", Icons.Filled.Bolt),
-    GROUPS("المجموعات والإرسال الجماعي", Icons.Filled.Groups)
+    RULES("قواعد الرد والتسجيل", Icons.Filled.Bolt),
+    STATUSES("أتمتة الحالات", Icons.Filled.AutoStories),
+    GROUPS("المجموعات والنشر", Icons.Filled.Groups)
 }
 
 @Composable
@@ -133,6 +134,14 @@ fun AutomationHubScreen(
         ) { tab ->
             when (tab) {
                 AutomationTab.RULES -> RulesScreen(viewModel = rulesViewModel)
+                AutomationTab.STATUSES -> {
+                    if (statusesViewModel != null) {
+                        StatusesScreen(viewModel = statusesViewModel)
+                    } else {
+                        val vm: StatusesViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                        StatusesScreen(viewModel = vm)
+                    }
+                }
                 AutomationTab.GROUPS -> GroupsScreen(viewModel = groupsViewModel)
             }
         }
