@@ -38,15 +38,13 @@ import com.whatsup.automation.presentation.theme.*
 
 enum class AutomationTab(val title: String, val icon: ImageVector) {
     RULES("قواعد الرد والتسجيل", Icons.Filled.Bolt),
-    STATUSES("أتمتة الحالات", Icons.Filled.AutoStories),
-    GROUPS("المجموعات والنشر", Icons.Filled.Groups)
+    GROUPS("المجموعات والنشر الجماعي", Icons.Filled.Groups)
 }
 
 @Composable
 fun AutomationHubScreen(
     rulesViewModel: RulesViewModel,
     groupsViewModel: GroupsViewModel,
-    statusesViewModel: StatusesViewModel? = null,
     initialTab: AutomationTab = AutomationTab.RULES,
     modifier: Modifier = Modifier
 ) {
@@ -61,7 +59,7 @@ fun AutomationHubScreen(
             .fillMaxSize()
             .background(DarkBgPrimary)
     ) {
-        // شريط التبويبات الفرعية العلوي بتصميم White Emerald Glass فخم
+        // شريط التبويبات الفخم بتصميم White Emerald Glass
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -74,7 +72,7 @@ fun AutomationHubScreen(
                     .background(Color(0xFFFFFFFF))
                     .border(1.dp, Color(0x3300A884), RoundedCornerShape(20.dp))
                     .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 AutomationTab.values().forEach { tab ->
                     val isSelected = selectedTab == tab
@@ -100,18 +98,18 @@ fun AutomationHubScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp)
                         ) {
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.title,
                                 tint = if (isSelected) Color.White else WhatsAppGreenDark,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                             Text(
                                 text = tab.title,
-                                fontSize = 11.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) Color.White else TextPrimary,
                                 maxLines = 1,
@@ -134,14 +132,6 @@ fun AutomationHubScreen(
         ) { tab ->
             when (tab) {
                 AutomationTab.RULES -> RulesScreen(viewModel = rulesViewModel)
-                AutomationTab.STATUSES -> {
-                    if (statusesViewModel != null) {
-                        StatusesScreen(viewModel = statusesViewModel)
-                    } else {
-                        val vm: StatusesViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-                        StatusesScreen(viewModel = vm)
-                    }
-                }
                 AutomationTab.GROUPS -> GroupsScreen(viewModel = groupsViewModel)
             }
         }

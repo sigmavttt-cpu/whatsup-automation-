@@ -42,7 +42,8 @@ data class GroupsUiState(
     val selectedMembersToAdd: Set<String> = emptySet(),
     val customAddName: String = "",
     val customAddPhone: String = "",
-    val isSuccessMessageShowing: Boolean = false
+    val isSuccessMessageShowing: Boolean = false,
+    val isLoading: Boolean = true
 )
 
 @HiltViewModel
@@ -93,7 +94,7 @@ class GroupsViewModel @Inject constructor(
     private fun loadGroups() {
         viewModelScope.launch {
             groupRepository.getAllGroups().collect { groupList ->
-                _uiState.update { it.copy(groups = groupList) }
+                _uiState.update { it.copy(groups = groupList, isLoading = false) }
             }
         }
     }

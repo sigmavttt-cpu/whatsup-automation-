@@ -16,5 +16,7 @@ class WhatsUpApplication : Application() {
         LocalCrashWatcher.install(this)
         // تشغيل حارس عدم الاستجابة وتجمد الشاشة (ANR Watchdog)
         LocalANRWatchdog.start(this)
+        // تثبيت مدير تحسين الذاكرة والوقاية الاستباقية من تسريب الذاكرة
+        com.whatsup.automation.data.diagnostics.MemoryOptimizationManager.install(this)
     }
 }

@@ -69,11 +69,25 @@ sealed class Screen(
         unselectedIcon = Icons.Outlined.Forum
     )
 
+    data object Settings : Screen(
+        route = "settings",
+        title = "الإعدادات",
+        selectedIcon = Icons.Filled.Settings,
+        unselectedIcon = Icons.Outlined.Settings
+    )
+
     data object System : Screen(
         route = "system",
         title = "النظام والربط",
         selectedIcon = Icons.Filled.Tune,
         unselectedIcon = Icons.Outlined.Tune
+    )
+
+    data object SplashAuth : Screen(
+        route = "splash_auth",
+        title = "الترحيب والدخول",
+        selectedIcon = Icons.Filled.AutoAwesome,
+        unselectedIcon = Icons.Outlined.AutoAwesome
     )
 
     // المسارات الفرعية للتوافق والتوجيه المباشر
@@ -90,12 +104,14 @@ val bottomNavItems = listOf(
     Screen.Dashboard,
     Screen.ChatsHub,
     Screen.Automation,
-    Screen.System
+    Screen.Statuses,
+    Screen.Settings,
+    Screen.Analytics
 )
 
 /**
  * شريط تنقل سفلي عائم فخم (Luxury Floating Capsule Bar).
- * يعتمد 4 محاور كبرى بمساحات لمس عريضة فسيحة مع حواف زمردية متوهجة وتأثيرات ارتدادية فاخرة.
+ * يعتمد 6 محاور كبرى بمساحات لمس مدروسة مع حواف زمردية متوهجة وتأثيرات ارتدادية فاخرة.
  */
 @Composable
 fun ModernBottomNavBar(
@@ -110,18 +126,18 @@ fun ModernBottomNavBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
                     elevation = 16.dp,
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(26.dp),
                     ambientColor = Color(0x1F00C853),
                     spotColor = Color(0x3300C853)
                 )
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(26.dp))
                 .background(Color(0xFFFFFFFF))
                 .border(
                     width = 1.5.dp,
@@ -132,9 +148,9 @@ fun ModernBottomNavBar(
                             Color(0x3300C853)
                         )
                     ),
-                    shape = RoundedCornerShape(28.dp)
+                    shape = RoundedCornerShape(26.dp)
                 )
-                .padding(horizontal = 8.dp, vertical = 7.dp),
+                .padding(horizontal = 4.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -170,11 +186,11 @@ fun ModernBottomNavBar(
                     modifier = Modifier
                         .weight(1f)
                         .scale(scale)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(bgPillBrush)
                         .then(
                             if (isSelected) {
-                                Modifier.border(1.dp, Color(0x3300C853), RoundedCornerShape(20.dp))
+                                Modifier.border(1.dp, Color(0x3300C853), RoundedCornerShape(16.dp))
                             } else Modifier
                         )
                         .clickable(
@@ -192,7 +208,7 @@ fun ModernBottomNavBar(
                                 }
                             }
                         }
-                        .padding(vertical = 7.dp, horizontal = 4.dp),
+                        .padding(vertical = 5.dp, horizontal = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -203,21 +219,22 @@ fun ModernBottomNavBar(
                             imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                             contentDescription = screen.title,
                             tint = iconTint,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
 
                         Text(
                             text = screen.title,
-                            fontSize = 11.5.sp,
+                            fontSize = 10.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = iconTint,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
 
                         // مؤشر كبسولي نشط متوهج
                         Box(
                             modifier = Modifier
-                                .size(width = if (isSelected) 14.dp else 0.dp, height = if (isSelected) 3.dp else 0.dp)
+                                .size(width = if (isSelected) 12.dp else 0.dp, height = if (isSelected) 2.5.dp else 0.dp)
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(if (isSelected) WhatsAppGreen else Color.Transparent)
                         )

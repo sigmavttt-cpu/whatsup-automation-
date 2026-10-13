@@ -206,6 +206,7 @@ fun CreateCampaignScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)

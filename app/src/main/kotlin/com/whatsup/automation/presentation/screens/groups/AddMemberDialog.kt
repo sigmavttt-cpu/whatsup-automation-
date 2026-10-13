@@ -69,7 +69,8 @@ fun AddMemberDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 440.dp),
+                    .heightIn(max = 440.dp)
+                    .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // تبويبات طريقة الإضافة

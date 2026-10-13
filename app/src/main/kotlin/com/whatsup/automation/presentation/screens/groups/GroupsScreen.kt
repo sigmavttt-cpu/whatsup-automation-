@@ -36,6 +36,7 @@ import com.whatsup.automation.domain.model.GroupLogStatus
 import com.whatsup.automation.domain.model.GroupMember
 import com.whatsup.automation.domain.model.GroupMessageLog
 import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.components.BentoSkeletonList
 import com.whatsup.automation.presentation.components.GlassmorphicCard
 import com.whatsup.automation.presentation.components.GradientButton
 import com.whatsup.automation.presentation.components.LiquidGradientButton
@@ -230,7 +231,11 @@ fun GroupsListScreen(
         }
 
         // قائمة بطاقات المجموعات
-        if (filteredGroups.isEmpty()) {
+        if (uiState.isLoading) {
+            item {
+                BentoSkeletonList(itemCount = 3, itemHeight = 160.dp)
+            }
+        } else if (filteredGroups.isEmpty()) {
             item {
                 BentoCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
@@ -240,29 +245,55 @@ fun GroupsListScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Groups,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(52.dp)
-                        )
-                        Text(
-                            text = "لا توجد بطاقات أو حملات حالياً",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "اضغط على زر (+) بالأعلى لاختيار جهات الاتصال وتقسيمها إلى بطاقات متساوية بأسلوب مرن وفاخر",
-                            fontSize = 13.sp,
-                            color = TextSecondary
-                        )
-                        LiquidGradientButton(
-                            text = "إنشاء حملة أو تقسيم جهات الاتصال الآن",
-                            onClick = { viewModel.openCreateModal() },
-                            modifier = Modifier.padding(top = 8.dp),
-                            icon = Icons.Filled.Add
-                        )
+                        if (uiState.searchQuery.isNotBlank()) {
+                            Icon(
+                                imageVector = Icons.Filled.SearchOff,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Text(
+                                text = "لا توجد بطاقات مطابقة لبحثك",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "لم نعثر على أي بطاقة أو حملة تحتوي على \"${uiState.searchQuery}\".",
+                                fontSize = 13.sp,
+                                color = TextSecondary
+                            )
+                            LiquidGradientButton(
+                                text = "مسح البحث 🔍",
+                                onClick = { viewModel.onSearchQueryChange("") },
+                                modifier = Modifier.padding(top = 8.dp),
+                                icon = Icons.Filled.Close
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Groups,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Text(
+                                text = "لا توجد بطاقات أو حملات حالياً",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "اضغط على زر (+) بالأعلى لاختيار جهات الاتصال وتقسيمها إلى بطاقات متساوية بأسلوب مرن وفاخر",
+                                fontSize = 13.sp,
+                                color = TextSecondary
+                            )
+                            LiquidGradientButton(
+                                text = "إنشاء حملة أو تقسيم جهات الاتصال الآن",
+                                onClick = { viewModel.openCreateModal() },
+                                modifier = Modifier.padding(top = 8.dp),
+                                icon = Icons.Filled.Add
+                            )
+                        }
                     }
                 }
             }

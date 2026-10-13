@@ -34,11 +34,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.whatsup.automation.domain.model.PatternType
 import com.whatsup.automation.domain.model.Rule
 import com.whatsup.automation.domain.model.RuleAction
-import com.whatsup.automation.presentation.components.BentoCard
-import com.whatsup.automation.presentation.components.GlassmorphicCard
-import com.whatsup.automation.presentation.components.GradientButton
-import com.whatsup.automation.presentation.components.LiquidGradientButton
-import com.whatsup.automation.presentation.components.SegmentedPillSelector
+import com.whatsup.automation.presentation.components.*
 import com.whatsup.automation.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -498,7 +494,11 @@ fun RulesScreen(
             }
 
             // 3. قائمة القواعد المسجلة
-            if (uiState.rules.isEmpty()) {
+            if (uiState.isLoading) {
+                item {
+                    BentoSkeletonList(itemCount = 3, itemHeight = 110.dp)
+                }
+            } else if (uiState.rules.isEmpty()) {
                 item {
                     BentoCard(modifier = Modifier.fillMaxWidth()) {
                         Column(

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.components.BentoSkeletonList
 import com.whatsup.automation.presentation.components.PulseReactor
 import com.whatsup.automation.presentation.theme.*
 
@@ -321,10 +322,10 @@ fun ChatsHubScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
+                    .weight(1f)
+                    .padding(vertical = 4.dp)
             ) {
-                CircularProgressIndicator(color = CyberCyan, modifier = Modifier.size(36.dp))
+                BentoSkeletonList(itemCount = 4, itemHeight = 110.dp)
             }
         } else {
             val query = uiState.searchQuery.trim().lowercase()
@@ -336,11 +337,25 @@ fun ChatsHubScreen(
                     }
 
                     if (filtered.isEmpty()) {
-                        EmptyHubState(
-                            icon = Icons.Outlined.CheckCircle,
-                            title = "لا توجد رسائل من غير مسجلين",
-                            subtitle = "جميع من راسلوك خلال آخر 24 ساعة مسجلين مسبقاً أو لا توجد رسائل جديدة."
-                        )
+                        if (query.isNotEmpty()) {
+                            EmptyHubState(
+                                icon = Icons.Outlined.SearchOff,
+                                title = "لا توجد نتائج مطابقة للبحث",
+                                subtitle = "لم نعثر على أي محادثة غير مسجلة تطابق \"$query\".",
+                                ctaText = "مسح البحث 🔍",
+                                ctaIcon = Icons.Filled.Close,
+                                onCtaClick = { viewModel.updateSearchQuery("") }
+                            )
+                        } else {
+                            EmptyHubState(
+                                icon = Icons.Outlined.CheckCircle,
+                                title = "لا توجد رسائل من غير مسجلين",
+                                subtitle = "جميع من راسلوك خلال آخر 24 ساعة مسجلين مسبقاً أو لا توجد رسائل جديدة.",
+                                ctaText = "تحديث وفحص الرسائل 🔄",
+                                ctaIcon = Icons.Filled.Refresh,
+                                onCtaClick = { viewModel.refresh() }
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -362,11 +377,25 @@ fun ChatsHubScreen(
                     }
 
                     if (filtered.isEmpty()) {
-                        EmptyHubState(
-                            icon = Icons.Outlined.Contacts,
-                            title = "لا توجد جهات اتصال مطابقة",
-                            subtitle = "لم يتم العثور على جهات اتصال مسجلة في الهاتف تطابق البحث."
-                        )
+                        if (query.isNotEmpty()) {
+                            EmptyHubState(
+                                icon = Icons.Outlined.SearchOff,
+                                title = "لا توجد جهات اتصال مطابقة للبحث",
+                                subtitle = "لم يتم العثور على أرقام أو أسماء تطابق \"$query\".",
+                                ctaText = "مسح البحث 🔍",
+                                ctaIcon = Icons.Filled.Close,
+                                onCtaClick = { viewModel.updateSearchQuery("") }
+                            )
+                        } else {
+                            EmptyHubState(
+                                icon = Icons.Outlined.Contacts,
+                                title = "لا توجد جهات اتصال مسجلة",
+                                subtitle = "لم يتم العثور على جهات اتصال مسجلة بالهاتف حتى الآن.",
+                                ctaText = "مزامنة جهات الاتصال 🔄",
+                                ctaIcon = Icons.Filled.Sync,
+                                onCtaClick = { viewModel.refresh() }
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -388,11 +417,25 @@ fun ChatsHubScreen(
                     }
 
                     if (filtered.isEmpty()) {
-                        EmptyHubState(
-                            icon = Icons.Outlined.HourglassEmpty,
-                            title = "لا توجد تسجيلات خلال آخر 24 ساعة",
-                            subtitle = "أي جهة اتصال جديدة يتم تسجيلها آلياً ستظهر هنا لمدة 24 ساعة."
-                        )
+                        if (query.isNotEmpty()) {
+                            EmptyHubState(
+                                icon = Icons.Outlined.SearchOff,
+                                title = "لا توجد تسجيلات مطابقة للبحث",
+                                subtitle = "لم يتم العثور على تسجيلات تطابق \"$query\".",
+                                ctaText = "مسح البحث 🔍",
+                                ctaIcon = Icons.Filled.Close,
+                                onCtaClick = { viewModel.updateSearchQuery("") }
+                            )
+                        } else {
+                            EmptyHubState(
+                                icon = Icons.Outlined.HourglassEmpty,
+                                title = "لا توجد تسجيلات خلال آخر 24 ساعة",
+                                subtitle = "أي جهة اتصال جديدة يتم تسجيلها آلياً ستظهر هنا لمدة 24 ساعة.",
+                                ctaText = "تحديث القائمة 🔄",
+                                ctaIcon = Icons.Filled.Refresh,
+                                onCtaClick = { viewModel.refresh() }
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -995,28 +1038,32 @@ private fun RegisteredTodayCard(
 }
 
 /**
- * شاشة الحالة الفارغة.
+ * شاشة الحالة الفارغة مع دعم أزرار الإجراء المباشر (Empty State with Actionable CTA).
  */
 @Composable
 private fun EmptyHubState(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    subtitle: String
+    subtitle: String,
+    ctaText: String? = null,
+    ctaIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onCtaClick: (() -> Unit)? = null
 ) {
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 40.dp),
+            .padding(top = 32.dp, bottom = 24.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(horizontal = 24.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(68.dp)
                     .clip(CircleShape)
                     .background(GlassFill)
                     .border(1.dp, GlassBorder, CircleShape),
@@ -1025,8 +1072,8 @@ private fun EmptyHubState(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = TextMuted,
-                    modifier = Modifier.size(32.dp)
+                    tint = WhatsAppGreen,
+                    modifier = Modifier.size(34.dp)
                 )
             }
 
@@ -1034,15 +1081,39 @@ private fun EmptyHubState(
                 text = title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = TextPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
 
             Text(
                 text = subtitle,
                 fontSize = 12.sp,
-                color = TextMuted,
+                color = TextSecondary,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
+
+            if (ctaText != null && onCtaClick != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onCtaClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WhatsAppGreen,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                    modifier = Modifier.heightIn(min = 48.dp) // Touch target >= 48dp
+                ) {
+                    if (ctaIcon != null) {
+                        Icon(ctaIcon, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text(text = ctaText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

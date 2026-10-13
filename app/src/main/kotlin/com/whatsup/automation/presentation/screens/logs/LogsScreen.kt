@@ -45,6 +45,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.components.BentoSkeletonList
 import com.whatsup.automation.presentation.theme.ObsidianGlowBorder
 
 import com.whatsup.automation.presentation.screens.logs.components.*
@@ -465,7 +466,11 @@ fun LogsScreen(
             // محتوى التبويب المختار
             when (uiState.selectedTab) {
                 LogsTab.CONVERSATIONS -> {
-                    if (uiState.filteredConversations.isEmpty()) {
+                    if (uiState.isRefreshing && uiState.filteredConversations.isEmpty()) {
+                        item {
+                            BentoSkeletonList(itemCount = 4, itemHeight = 82.dp)
+                        }
+                    } else if (uiState.filteredConversations.isEmpty()) {
                         item {
                             GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
                                 Box(
@@ -555,7 +560,11 @@ fun LogsScreen(
                         }
                     }
 
-                    if (uiState.filteredLogs.isEmpty()) {
+                    if (uiState.isRefreshing && uiState.filteredLogs.isEmpty()) {
+                        item {
+                            BentoSkeletonList(itemCount = 5, itemHeight = 72.dp)
+                        }
+                    } else if (uiState.filteredLogs.isEmpty()) {
                         item {
                             GlassmorphicCard(modifier = Modifier.fillMaxWidth()) {
                                 Box(

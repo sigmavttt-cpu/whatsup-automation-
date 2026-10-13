@@ -38,7 +38,8 @@ data class StatusesUiState(
     val sortBy: StatusSortBy = StatusSortBy.DATE_DESC,
     val selectedIds: Set<String> = emptySet(),
     val isMultiSelectMode: Boolean = false,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val isLoading: Boolean = true
 ) {
     val allCount: Int
         get() = statuses.size
@@ -172,7 +173,7 @@ class StatusesViewModel @Inject constructor(
                     )
                 }
             }.collect { enriched ->
-                _uiState.update { it.copy(statuses = enriched) }
+                _uiState.update { it.copy(statuses = enriched, isLoading = false) }
             }
         }
     }

@@ -415,48 +415,85 @@ fun DashboardScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatCard(
-                        title = "الرسائل المعالجة",
-                        value = uiState.stats.totalProcessed.toString(),
-                        icon = Icons.Filled.Message,
-                        accentColor = CyberCyan,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    StatCard(
-                        title = "جهات الاتصال المحفوظة",
-                        value = uiState.stats.totalSavedContacts.toString(),
-                        icon = Icons.Filled.PersonAdd,
-                        accentColor = WhatsAppGreen,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatCard(
-                        title = "الردود التلقائية",
-                        value = uiState.stats.totalRepliesSent.toString(),
-                        icon = Icons.Filled.Reply,
-                        accentColor = ElectricBlue,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    StatCard(
-                        title = "العمليات الناجحة",
-                        value = uiState.stats.successfulOperations.toString(),
-                        icon = Icons.Filled.CheckCircle,
-                        accentColor = NeonPurple,
-                        modifier = Modifier.weight(1f)
-                    )
+                AdaptiveBentoContainer { isTablet ->
+                    if (isTablet) {
+                        // صف أفقي بأربعة أعمدة للشاشات اللوحية والعريضة
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            StatCard(
+                                title = "الرسائل المعالجة",
+                                value = uiState.stats.totalProcessed.toString(),
+                                icon = Icons.Filled.Message,
+                                accentColor = CyberCyan,
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "جهات الاتصال المحفوظة",
+                                value = uiState.stats.totalSavedContacts.toString(),
+                                icon = Icons.Filled.PersonAdd,
+                                accentColor = WhatsAppGreen,
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "الردود التلقائية",
+                                value = uiState.stats.totalRepliesSent.toString(),
+                                icon = Icons.Filled.Reply,
+                                accentColor = ElectricBlue,
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "العمليات الناجحة",
+                                value = uiState.stats.successfulOperations.toString(),
+                                icon = Icons.Filled.CheckCircle,
+                                accentColor = NeonPurple,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else {
+                        // صفان ثنائيان للهواتف العادية
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                StatCard(
+                                    title = "الرسائل المعالجة",
+                                    value = uiState.stats.totalProcessed.toString(),
+                                    icon = Icons.Filled.Message,
+                                    accentColor = CyberCyan,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                StatCard(
+                                    title = "جهات الاتصال المحفوظة",
+                                    value = uiState.stats.totalSavedContacts.toString(),
+                                    icon = Icons.Filled.PersonAdd,
+                                    accentColor = WhatsAppGreen,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                StatCard(
+                                    title = "الردود التلقائية",
+                                    value = uiState.stats.totalRepliesSent.toString(),
+                                    icon = Icons.Filled.Reply,
+                                    accentColor = ElectricBlue,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                StatCard(
+                                    title = "العمليات الناجحة",
+                                    value = uiState.stats.successfulOperations.toString(),
+                                    icon = Icons.Filled.CheckCircle,
+                                    accentColor = NeonPurple,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.whatsup.automation.data.security.SessionKeystore
 import com.whatsup.automation.presentation.navigation.ModernBottomNavBar
@@ -191,22 +192,54 @@ class MainActivity : ComponentActivity() {
                         }
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
+                            val navBackStackEntry by navController.currentBackStackEntryAsState()
+                            val currentRoute = navBackStackEntry?.destination?.route
+                            val isSplashAuth = currentRoute == Screen.SplashAuth.route
+
                             Scaffold(
                                 modifier = Modifier.fillMaxSize(),
                                 containerColor = DarkBgPrimary,
                                 bottomBar = {
-                                    ModernBottomNavBar(navController = navController)
+                                    if (!isSplashAuth) {
+                                        ModernBottomNavBar(navController = navController)
+                                    }
                                 }
                             ) { innerPadding ->
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(innerPadding)
+                                        .then(if (isSplashAuth) Modifier else Modifier.padding(innerPadding))
                                 ) {
                                     NavHost(
                                         navController = navController,
-                                        startDestination = Screen.Dashboard.route
+                                        startDestination = Screen.SplashAuth.route
                                     ) {
+                                        composable(Screen.SplashAuth.route) {
+                                            com.whatsup.automation.presentation.screens.auth.SplashAuthScreen(
+                                                onLoginSuccess = {
+                                                    navController.navigate(Screen.Dashboard.route) {
+                                                        popUpTo(Screen.SplashAuth.route) { inclusive = true }
+                                                    }
+                                                },
+                                                onLinkNewAccount = {
+                                                    navController.navigate(Screen.Pairing.route) {
+                                                        popUpTo(Screen.SplashAuth.route) { inclusive = true }
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        composable(Screen.Settings.route) {
+                                            com.whatsup.automation.presentation.screens.settings.SettingsScreen(
+                                                onNavigateToPairing = { navController.navigate(Screen.Pairing.route) },
+                                                onNavigateToVault = { navController.navigate(Screen.Vault.route) },
+                                                onNavigateToBackup = { navController.navigate(Screen.System.route) },
+                                                onOpenLockSettings = { showLockSettingsDialog = true },
+                                                onCheckUpdates = { updateViewModel.checkForUpdates(isManual = true) },
+                                                onNavigateToSplashAuth = { navController.navigate(Screen.SplashAuth.route) }
+                                            )
+                                        }
+
                                         composable(Screen.Dashboard.route) {
                                             val viewModel: DashboardViewModel = hiltViewModel()
                                             DashboardScreen(
@@ -224,11 +257,9 @@ class MainActivity : ComponentActivity() {
 
                                         composable(Screen.Automation.route) {
                                             val rulesViewModel: RulesViewModel = hiltViewModel()
-                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
                                             val groupsViewModel: GroupsViewModel = hiltViewModel()
                                             AutomationHubScreen(
                                                 rulesViewModel = rulesViewModel,
-                                                statusesViewModel = statusesViewModel,
                                                 groupsViewModel = groupsViewModel
                                             )
                                         }
@@ -250,11 +281,9 @@ class MainActivity : ComponentActivity() {
                                         // المسارات الفرعية للتوجيه المباشر
                                         composable(Screen.Rules.route) {
                                             val rulesViewModel: RulesViewModel = hiltViewModel()
-                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
                                             val groupsViewModel: GroupsViewModel = hiltViewModel()
                                             AutomationHubScreen(
                                                 rulesViewModel = rulesViewModel,
-                                                statusesViewModel = statusesViewModel,
                                                 groupsViewModel = groupsViewModel,
                                                 initialTab = AutomationTab.RULES
                                             )
@@ -272,11 +301,9 @@ class MainActivity : ComponentActivity() {
 
                                         composable(Screen.Groups.route) {
                                             val rulesViewModel: RulesViewModel = hiltViewModel()
-                                            val statusesViewModel: StatusesViewModel = hiltViewModel()
                                             val groupsViewModel: GroupsViewModel = hiltViewModel()
                                             AutomationHubScreen(
                                                 rulesViewModel = rulesViewModel,
-                                                statusesViewModel = statusesViewModel,
                                                 groupsViewModel = groupsViewModel,
                                                 initialTab = AutomationTab.GROUPS
                                             )
@@ -303,26 +330,28 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
-                                    // زر القائمة الجانبية العائم الفاخر (Floating Drawer Trigger)
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(bottom = 86.dp, start = 16.dp)
-                                            .align(Alignment.BottomStart)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFFFFFFF))
-                                            .border(1.5.dp, Color(0x6600A884), CircleShape)
-                                            .size(46.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = { scope.launch { drawerState.open() } },
-                                            modifier = Modifier.fillMaxSize()
+                                    // زر القائمة الجانبية العائم الفاخر (Floating Drawer Trigger) يظهر فقط خارج شاشة الدخول
+                                    if (!isSplashAuth) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(bottom = 86.dp, start = 16.dp)
+                                                .align(Alignment.BottomStart)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFFFFFFF))
+                                                .border(1.5.dp, Color(0x6600A884), CircleShape)
+                                                .size(46.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Menu,
-                                                contentDescription = "القائمة الجانبية",
-                                                tint = com.whatsup.automation.presentation.theme.WhatsAppGreen,
-                                                modifier = Modifier.size(22.dp)
-                                            )
+                                            IconButton(
+                                                onClick = { scope.launch { drawerState.open() } },
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Menu,
+                                                    contentDescription = "القائمة الجانبية",
+                                                    tint = com.whatsup.automation.presentation.theme.WhatsAppGreen,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }

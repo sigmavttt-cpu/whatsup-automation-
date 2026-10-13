@@ -267,6 +267,28 @@ fun AppNavigationDrawer(
                 }
             )
 
+            DrawerNavRow(
+                title = "الإعدادات العامة ⚙️",
+                subtitle = "نمط Grouped Settings List واللغة والحساب",
+                icon = Icons.Default.Settings,
+                isSelected = currentRoute == Screen.Settings.route,
+                onClick = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(Screen.Settings.route) { launchSingleTop = true }
+                }
+            )
+
+            DrawerNavRow(
+                title = "شاشة الترحيب والدخول ✨",
+                subtitle = "استعراض السبلاش السينمائي وتسجيل الدخول",
+                icon = Icons.Default.AutoAwesome,
+                isSelected = currentRoute == Screen.SplashAuth.route,
+                onClick = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(Screen.SplashAuth.route) { launchSingleTop = true }
+                }
+            )
+
             HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = Color(0x1F00A884))
 
             // 2. قسم الخصوصية والأمان

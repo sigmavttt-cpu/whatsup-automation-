@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.whatsup.automation.domain.model.StatusMediaType
 import com.whatsup.automation.domain.model.StatusStory
 import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.components.BentoSkeletonList
 import com.whatsup.automation.presentation.components.PulseReactor
 import com.whatsup.automation.presentation.components.StoryAvatarRing
 import com.whatsup.automation.presentation.theme.*
@@ -468,9 +469,19 @@ fun StatusesScreen(
 
             // 6. قائمة الحالات الفعلية (Status Cards)
             val displayedList = uiState.displayedStatuses
-            if (displayedList.isEmpty()) {
+            if (uiState.isLoading) {
                 item {
-                    EmptyStatusesCard(subTab = uiState.selectedSubTab, hasSearch = uiState.searchQuery.isNotEmpty())
+                    BentoSkeletonList(itemCount = 4, itemHeight = 110.dp)
+                }
+            } else if (displayedList.isEmpty()) {
+                item {
+                    EmptyStatusesCard(
+                        subTab = uiState.selectedSubTab,
+                        hasSearch = uiState.searchQuery.isNotEmpty(),
+                        onClearSearch = { viewModel.setSearchQuery("") },
+                        onRefresh = { viewModel.refreshStatuses() },
+                        onSwitchToNew = { viewModel.selectSubTab(StatusSubTab.NEW) }
+                    )
                 }
             } else {
                 items(displayedList, key = { it.id }) { story ->
@@ -798,13 +809,28 @@ private fun StatusStoryCard(
 }
 
 /**
- * بطاقة الحالات الفارغة الإرشادية.
+ * بيانات بطاقة الحالة الفارغة.
+ */
+private data class EmptyStatusData(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val title: String,
+    val desc: String,
+    val ctaText: String,
+    val ctaAction: () -> Unit
+)
+
+/**
+ * بطاقة الحالات الفارغة الإرشادية مع أزرار الإجراء المباشر (Empty State with Actionable CTA).
  */
 @Composable
 private fun EmptyStatusesCard(
     subTab: StatusSubTab,
-    hasSearch: Boolean
+    hasSearch: Boolean,
+    onClearSearch: () -> Unit,
+    onRefresh: () -> Unit,
+    onSwitchToNew: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     BentoCard(
         modifier = Modifier.fillMaxWidth(),
         borderBrush = ObsidianGlowBorder.None
@@ -812,42 +838,114 @@ private fun EmptyStatusesCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 24.dp),
+                .padding(vertical = 28.dp, horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            val (icon, title, desc) = when {
-                hasSearch -> Triple(
-                    Icons.Filled.SearchOff,
-                    "لا توجد نتائج مطابقة للبحث",
-                    "جرّب البحث باسم آخر أو رقم هاتف مختلف."
+            val config = when {
+                hasSearch -> EmptyStatusData(
+                    icon = Icons.Filled.SearchOff,
+                    title = "لا توجد نتائج مطابقة للبحث",
+                    desc = "جرّب البحث باسم آخر أو رقم هاتف مختلف.",
+                    ctaText = "مسح البحث 🔍",
+                    ctaAction = onClearSearch
                 )
-                subTab == StatusSubTab.NEW -> Triple(
-                    Icons.Filled.CheckCircleOutline,
-                    "لا توجد حالات جديدة حالياً",
-                    "تمت مشاهدة والتفاعل مع جميع الحالات المرصودة حتى الآن ⚡"
+                subTab == StatusSubTab.NEW -> EmptyStatusData(
+                    icon = Icons.Filled.CheckCircleOutline,
+                    title = "لا توجد حالات جديدة حالياً",
+                    desc = "تمت مشاهدة والتفاعل مع جميع الحالات المرصودة حتى الآن ⚡",
+                    ctaText = "تحديث الحالات الآن 🔄",
+                    ctaAction = onRefresh
                 )
-                subTab == StatusSubTab.VIEWED -> Triple(
-                    Icons.Filled.Visibility,
-                    "لا توجد حالات تمت مشاهدتها بعد",
-                    "ستظهر هنا الحالات فور مشاهدتها أو التفاعل معها."
+                subTab == StatusSubTab.VIEWED -> EmptyStatusData(
+                    icon = Icons.Filled.Visibility,
+                    title = "لا توجد حالات تمت مشاهدتها بعد",
+                    desc = "ستظهر هنا الحالات فور مشاهدتها أو التفاعل معها.",
+                    ctaText = "العودة للحالات الجديدة ✨",
+                    ctaAction = onSwitchToNew
                 )
-                subTab == StatusSubTab.FAVORITES -> Triple(
-                    Icons.Filled.StarOutline,
-                    "قائمة المفضلة فارغة",
-                    "اضغط على رمز النجمة ⭐ بجانب أي جهة اتصال لإضافتها للمفضلة."
+                subTab == StatusSubTab.DELETED_TEMP -> EmptyStatusData(
+                    icon = Icons.Filled.HistoryToggleOff,
+                    title = "لا توجد حالات محذوفة مؤقتاً",
+                    desc = "الحالات التي يحذفها أصحابها خلال 24 ساعة تُحفظ هنا تلقائياً لخصوصيتك ⏳",
+                    ctaText = "تحديث الحالات 🔄",
+                    ctaAction = onRefresh
                 )
-                subTab == StatusSubTab.MUTED -> Triple(
-                    Icons.Filled.VolumeOff,
-                    "لا توجد جهات اتصال مستثناة",
-                    "يمكنك استثناء أي شخص (مثل سعيد) من المشاهدة بالضغط على زر 🚫 بجانبه."
+                subTab == StatusSubTab.FAVORITES -> EmptyStatusData(
+                    icon = Icons.Filled.StarOutline,
+                    title = "قائمة المفضلة فارغة",
+                    desc = "اضغط على رمز النجمة ⭐ بجانب أي جهة اتصال لتفضيل حالاتها دائماً.",
+                    ctaText = "استعراض الحالات الجديدة ✨",
+                    ctaAction = onSwitchToNew
                 )
-                else -> Triple(Icons.Filled.Info, "لا توجد بيانات", "")
+                subTab == StatusSubTab.MUTED -> EmptyStatusData(
+                    icon = Icons.Filled.VolumeOff,
+                    title = "لا توجد جهات اتصال مستثناة",
+                    desc = "يمكنك استثناء أي شخص من المشاهدة بالضغط على زر 🚫 بجانبه.",
+                    ctaText = "العودة للحالات الجديدة ✨",
+                    ctaAction = onSwitchToNew
+                )
+                else -> EmptyStatusData(
+                    icon = Icons.Filled.Info,
+                    title = "لا توجد حالات متوفرة",
+                    desc = "ستظهر الحالات التلقائية بمجرد استلامها عبر واتساب.",
+                    ctaText = "تحديث 🔄",
+                    ctaAction = onRefresh
+                )
             }
 
-            Icon(icon, contentDescription = null, tint = TextMuted, modifier = Modifier.size(36.dp))
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Text(desc, fontSize = 12.sp, color = TextSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(GlassFill)
+                    .border(1.dp, GlassBorder, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = config.icon,
+                    contentDescription = null,
+                    tint = WhatsAppGreen,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Text(
+                text = config.title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Text(
+                text = config.desc,
+                fontSize = 12.sp,
+                color = TextSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    config.ctaAction()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = WhatsAppGreen,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(
+                    text = config.ctaText,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

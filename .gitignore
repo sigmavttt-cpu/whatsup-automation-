@@ -82,3 +82,9 @@ local.properties
 # ─── Docs يُحجب عن الأدوات (موجودة في .docs/) ───────────────
 /.docs/
 /outputs/
+
+# ─── Temp Cache & Local Python Scripts ───────────────────────
+.kotlin/
+__pycache__/
+*.pyc
+key_remap_fixer.pyw
