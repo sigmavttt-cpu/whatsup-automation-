@@ -1,7 +1,9 @@
 package com.whatsup.automation.presentation.screens.auth
 
+import android.os.SystemClock
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,217 +28,135 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.whatsup.automation.data.security.LicenseState
+import com.whatsup.automation.presentation.screens.activation.ActivationViewModel
+import com.whatsup.automation.presentation.screens.auth.components.LoginAiCoreCanvas
+import com.whatsup.automation.presentation.screens.auth.components.SplashRadarView
+import com.whatsup.automation.presentation.screens.auth.components.SubscriptionAuthDialog
 import com.whatsup.automation.presentation.theme.*
-import kotlinx.coroutines.delay
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
- * شاشة سبلاش سكرين + تسجيل الدخول السينمائية المشتركة (Splash & Login Harmonic Experience).
- * تجمع بين:
- * 1) السبلاش سكرين (الصورة 2): شعار Sigma، مدارات نيون، 3 كبسولات عائمة (رسائل، مستخدم، صاعقة).
- * 2) شاشة تسجيل الدخول (الصورة 1): أزرار «تسجيل الدخول» و «ربط حساب جديد»، تذييل الصفحة وتوهج الشعار.
- * 3) حركة انسيابية فائقة السلاسة (Shared Animation & Fluid Transition) تربط الاثنين بروعة بصرية 60/120fps.
+ * مراحل واجهة البداية والدخول السينمائية (Splash & Login Harmonic Phases)
  */
 enum class SplashPhase {
-    SPLASH_ORBITAL, // المرحلة الأولى: مدارات السبلاش الأيقونية العائمة
-    LOGIN_INTERACTIVE // المرحلة الثانية: شاشة الدخول وأزرار الربط التفاعلية
+    SPLASH_ORBITAL,   // مرحلة السبلاش: الرادار المداري وشعار اللانهاية
+    LOGIN_INTERACTIVE // مرحلة الدخول: نواة الذكاء الاصطناعي 3D ونظام الاشتراكات
 }
 
+/**
+ * شاشة البداية وتسجيل الدخول المتكاملة (Sigma 2.0 AutoFlow Splash & Auth Screen).
+ * مطابقة بنسبة 100% للنموذج الأولي في sigma_autoflow_v2_0 (1).html وللصور المرفقة:
+ * - شاشة البداية: شعار اللانهاية ∞ المتوهج + رادار متعدد الحلقات + موجات سونار + 3 أيقونات مدارية + شريط ليزر للتقدم.
+ * - شاشة تسجيل الدخول: شعار حرف S السيبراني المحاط بإطار سداسي وماسي دوّار + نواة 3D AI Core مع 78 عقدة تفاعلية قابلة للسحب + 3 كبسولات HUD.
+ * - تسجيل الدخول عبر نظام الاشتراكات الفعلي: فحص حالة الترخيص وإتاحة تفعيل الاشتراك بكود رسمي أو الدخول الفوري إذا كان الاشتراك نشطاً.
+ */
 @Composable
 fun SplashAuthScreen(
     onLoginSuccess: () -> Unit,
-    onLinkNewAccount: () -> Unit,
-    modifier: Modifier = Modifier
+    onLinkNewAccount: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    activationViewModel: ActivationViewModel = hiltViewModel()
 ) {
     val haptic = LocalHapticFeedback.current
+    val licenseState by activationViewModel.licenseState.collectAsState()
 
-    // حالة المرحلة الحالية (تبدأ بالسبلاش وتتحول تلقائياً أو بالنقر إلى الدخول)
     var currentPhase by remember { mutableStateOf(SplashPhase.SPLASH_ORBITAL) }
+    var showActivationDialog by remember { mutableStateOf(false) }
 
-    // مؤقت التحول السلس التلقائي من السبلاش إلى الدخول بعد 2.4 ثانية
-    LaunchedEffect(Unit) {
-        delay(2400)
+    // تقدم مؤشر ليزر السبلاش (3 ثوانٍ كاملة بدقة على ساعة الهاردوير الحقيقية)
+    var laserProgress by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(currentPhase) {
         if (currentPhase == SplashPhase.SPLASH_ORBITAL) {
+            val durationMs = 3000L
+            val startTime = SystemClock.uptimeMillis()
+            while (true) {
+                val elapsed = SystemClock.uptimeMillis() - startTime
+                val fraction = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
+                laserProgress = fraction
+                if (fraction >= 1f) break
+                delay(16)
+            }
+            delay(120)
             currentPhase = SplashPhase.LOGIN_INTERACTIVE
         }
     }
 
-    // حركة حية مستمرة للمدارات والأيقونات العائمة
-    val infiniteTransition = rememberInfiniteTransition(label = "OrbitalFloating")
-    val orbitPulse by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Pulse"
-    )
-
-    val floatAnim1 by infiniteTransition.animateFloat(
-        initialValue = -6f,
-        targetValue = 6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Float1"
-    )
-
-    val floatAnim2 by infiniteTransition.animateFloat(
-        initialValue = 6f,
-        targetValue = -6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Float2"
-    )
-
-    // تحولات الانتقال بين السبلاش والدخول
     val isLogin = currentPhase == SplashPhase.LOGIN_INTERACTIVE
 
-    val orbitalAlpha by animateFloatAsState(
-        targetValue = if (isLogin) 0.08f else 1f,
-        animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
-        label = "OrbitalAlpha"
-    )
+    // مؤقت زمني حي حقيقي لا يعتمد على أنظمة الأندرويد لضمان استمرار دوران ونبض الحركات 60fps
+    var animTimeMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        val start = SystemClock.uptimeMillis()
+        while (true) {
+            animTimeMs = SystemClock.uptimeMillis() - start
+            delay(16)
+        }
+    }
 
-    val orbitalScale by animateFloatAsState(
-        targetValue = if (isLogin) 1.25f else 1f,
-        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
-        label = "OrbitalScale"
-    )
+    val floatTextY = (kotlin.math.sin(animTimeMs * 0.0028) * 4.0).toFloat()
+    val btnPulseScale = 1.0f + (kotlin.math.sin(animTimeMs * 0.004) * 0.02).toFloat()
+    val btnGlowSweep = ((animTimeMs % 2200L).toFloat() / 2200f)
 
-    val logoScale by animateFloatAsState(
-        targetValue = if (isLogin) 0.92f else 1.08f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "LogoScale"
+    // تحولات انسيابية
+    val contentAlpha by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(600),
+        label = "ContentAlpha"
     )
 
     val buttonsOffset by animateFloatAsState(
-        targetValue = if (isLogin) 0f else 120f,
+        targetValue = if (isLogin) 0f else 80f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "ButtonsOffset"
     )
 
     val buttonsAlpha by animateFloatAsState(
         targetValue = if (isLogin) 1f else 0f,
-        animationSpec = tween(durationMillis = 600, delayMillis = 200, easing = LinearOutSlowInEasing),
+        animationSpec = tween(durationMillis = 500, delayMillis = 150),
         label = "ButtonsAlpha"
     )
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF060D12)) // أسود كربوني نيلي فائق العمق مطابق للصور
+            .background(Color(0xFF040B08)) // الخلفية الليلية العميقة المطابقة للـ HTML
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                // إمكانية تخطي السبلاش فورا بالنقر
+                // النقر في مرحلة السبلاش يتخطاه فوراً لمرحلة الدخول
                 if (currentPhase == SplashPhase.SPLASH_ORBITAL) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     currentPhase = SplashPhase.LOGIN_INTERACTIVE
                 }
             }
     ) {
-        // 1. هالة النيون الخلفية الخافتة (Aurora Ambient Glow)
+        // 1. هالة النيون المحيطية العلوية (Ambient Aurora Glow)
         Box(
             modifier = Modifier
-                .size(450.dp)
+                .size(460.dp)
                 .align(Alignment.TopCenter)
-                .offset(y = (-60).dp)
+                .offset(y = (-80).dp)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0x2800E676),
-                            Color(0x0F00C853),
+                            Color(0x3300E676),
+                            Color(0x1000BFA5),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        // 2. المدارات والكبسولات العائمة التفاعلية (Orbital Graphics)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .scale(orbitalScale)
-                .alpha(orbitalAlpha)
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val centerOffset = Offset(size.width * 0.5f, size.height * 0.65f)
-                val baseRadius = size.width * 0.42f * orbitPulse
-
-                // رسم أقواس المدارات النيونية المنحنية
-                drawArc(
-                    color = Color(0x2200E676),
-                    startAngle = 140f,
-                    sweepAngle = 260f,
-                    useCenter = false,
-                    topLeft = Offset(centerOffset.x - baseRadius, centerOffset.y - baseRadius),
-                    size = androidx.compose.ui.geometry.Size(baseRadius * 2, baseRadius * 2),
-                    style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                val innerRadius = baseRadius * 0.72f
-                drawArc(
-                    color = Color(0x1800E676),
-                    startAngle = 100f,
-                    sweepAngle = 240f,
-                    useCenter = false,
-                    topLeft = Offset(centerOffset.x - innerRadius, centerOffset.y - innerRadius),
-                    size = androidx.compose.ui.geometry.Size(innerRadius * 2, innerRadius * 2),
-                    style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                val outerRadius = baseRadius * 1.25f
-                drawArc(
-                    color = Color(0x1200E676),
-                    startAngle = 180f,
-                    sweepAngle = 160f,
-                    useCenter = false,
-                    topLeft = Offset(centerOffset.x - outerRadius, centerOffset.y - outerRadius),
-                    size = androidx.compose.ui.geometry.Size(outerRadius * 2, outerRadius * 2),
-                    style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round)
-                )
-            }
-
-            // الكبسولة 1: كبسولة الرسائل (أعلى اليمين)
-            OrbitalBadge(
-                icon = Icons.Default.Forum,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(x = 100.dp, y = (40 + floatAnim1).dp)
-            )
-
-            // الكبسولة 2: كبسولة المستخدم/الملف الشخصي (اليسار)
-            OrbitalBadge(
-                icon = Icons.Default.Person,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(x = (-100).dp, y = (100 + floatAnim2).dp)
-            )
-
-            // الكبسولة 3: كبسولة الصاعقة/الأتمتة (أسفل اليمين)
-            OrbitalBadge(
-                icon = Icons.Default.Bolt,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(x = 90.dp, y = (160 + floatAnim1).dp)
-            )
-        }
-
-        // 3. المحتوى الرأسي الأساسي (الشعار، العنوان، الأزرار)
+        // 2. المحتوى الرئيسي المقسم
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -249,88 +169,108 @@ fun SplashAuthScreen(
             // الجزء العلوي: الشعار والعناوين
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 40.dp)
+                modifier = Modifier.padding(top = 28.dp)
             ) {
-                // الشعار الأيقوني المتوهج (Sigma / Infinity Glowing Ribbon)
+                // الشعار التفاعلي: اللانهاية في السبلاش أو حرف S السيبراني في الدخول
                 Box(
                     modifier = Modifier
-                        .size(110.dp)
-                        .scale(logoScale),
+                        .size(92.dp)
+                        .clip(CircleShape)
+                        .clickable {
+                            // النقر على الشعار في شاشة الدخول يعيد عرض السبلاش
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            currentPhase = if (isLogin) SplashPhase.SPLASH_ORBITAL else SplashPhase.LOGIN_INTERACTIVE
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    // توهج خلفي ناعم للشعار
-                    Box(
-                        modifier = Modifier
-                            .size(90.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(Color(0x4400E676), Color.Transparent)
-                                )
+                    Crossfade(
+                        targetState = isLogin,
+                        animationSpec = tween(500),
+                        label = "LogoCrossfade"
+                    ) { showLoginLogo ->
+                        if (showLoginLogo) {
+                            // شعار حرف S السيبراني المحاط بإطار ماسي/سداسي دوّار (مطابق للصورة 1)
+                            CyberSMonogram(
+                                modifier = Modifier.size(86.dp),
+                                animTimeMs = animTimeMs
                             )
-                    )
-
-                    // رسم شعار Sigma / Infinity Loop المنحني المتوهج
-                    SigmaInfinityIcon(
-                        modifier = Modifier.size(72.dp),
-                        isInfinity = isLogin
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // اسم التطبيق: Sigma
-                Text(
-                    text = "Sigma",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    letterSpacing = 0.5.sp
-                )
-
-                // السطر الفرعي المميز: AutoFlow 2.0 (أخضر نيون + أبيض)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Text(
-                        text = "AutoFlow",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = WhatsAppGreenLight
-                    )
-                    Text(
-                        text = "2.0",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                        } else {
+                            // شعار اللانهاية المتوهج المنحني (مطابق للصورة 2)
+                            GlowingInfinityLogo(
+                                modifier = Modifier.size(80.dp),
+                                animTimeMs = animTimeMs
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // العبارة الوصفية الترحيبية (تتحول بنعومة بين السبلاش والدخول)
+                // اسم التطبيق الرئيسي مع اهتزاز ميكرو انسيابي
+                Text(
+                    text = "Sigma",
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.offset(y = (-floatTextY).dp)
+                )
+
+                // السطر الفرعي الفاخر: AutoFlow (بدون 2.0 وبحركة انسيابية)
+                Text(
+                    text = "AutoFlow",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF00E676),
+                    modifier = Modifier
+                        .offset(y = floatTextY.dp)
+                        .padding(top = 2.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // النص الوصفي المتغير بنعومة
                 Crossfade(
                     targetState = isLogin,
                     animationSpec = tween(400),
                     label = "TaglineCrossfade"
                 ) { showLoginText ->
                     Text(
-                        text = if (showLoginText) {
-                            "مرحباً بك في تجربة الأتمتة الذكية"
-                        } else {
-                            "أتمتة ذكية .. تواصل باحتراف"
-                        },
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal,
+                        text = if (showLoginText) "مرحباً بك في تجربة الأتمتة الذكية" else "أتمتة ذكية .. تواصل باحتراف",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
                         color = Color(0xFF94A3B8),
                         textAlign = TextAlign.Center
                     )
                 }
             }
 
-            // الجزء السفلي: أزرار الدخول وتذييل الصفحة (المرحلة 3)
+            // الجزء الأوسط: التبديل بين رادار السبلاش ونواة الذكاء الاصطناعي ثلاثية الأبعاد
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Crossfade(
+                    targetState = isLogin,
+                    animationSpec = tween(600),
+                    label = "CenterAnimationCrossfade"
+                ) { showLoginAnim ->
+                    if (showLoginAnim) {
+                        // نواة الذكاء الاصطناعي ثلاثية الأبعاد التفاعلية + كبسولات HUD
+                        LoginAiCoreCanvas(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        // رادار السبلاش متعدد الحلقات + شريط الليزر
+                        SplashRadarView(
+                            laserProgress = laserProgress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // الجزء السفلي: أزرار الدخول وربط الحساب ونظام الاشتراكات (يظهر في مرحلة الدخول)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -342,197 +282,231 @@ fun SplashAuthScreen(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // الزر الأساسي: «تسجيل الدخول» كبسولي زمردي نيون فخم مطابق للصورة 1
+                    // شارة الاشتراك النشط إن وُجد (مستوحى من نظام التراخيص)
+                    if (licenseState is LicenseState.Active) {
+                        val active = licenseState as LicenseState.Active
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0x2600E676))
+                                .border(1.dp, Color(0x6600E676), RoundedCornerShape(20.dp))
+                                .clickable { showActivationDialog = true }
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = Color(0xFF00E676),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "الاشتراك نشط (متبقي ${active.remainingDays} يوماً) 🛡️",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF00E676)
+                                )
+                            }
+                        }
+                    }
+
+                    // الزر الأساسي: «تسجيل الدخول» زمردي نيون فخم بحركة نبضية وشعاع متوهج
                     Button(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onLoginSuccess()
+                            if (licenseState is LicenseState.Active) {
+                                // اشتراك نشط: دخول فوري
+                                onLoginSuccess()
+                            } else {
+                                // غير مفعل أو منتهٍ: فتح نافذة تفعيل الاشتراك
+                                showActivationDialog = true
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp)
-                            .shadow(16.dp, RoundedCornerShape(27.dp), spotColor = Color(0x8800E676)),
-                        shape = RoundedCornerShape(27.dp),
+                            .height(56.dp)
+                            .scale(btnPulseScale)
+                            .shadow(24.dp, RoundedCornerShape(28.dp), spotColor = Color(0x9900E676))
+                            .border(
+                                width = 1.5.dp,
+                                brush = Brush.horizontalGradient(
+                                    listOf(
+                                        Color(0xFF00E676).copy(alpha = 0.3f),
+                                        Color.White.copy(alpha = 0.9f),
+                                        Color(0xFF00E676).copy(alpha = 0.3f)
+                                    ),
+                                    startX = (btnGlowSweep * 700f) - 350f,
+                                    endX = (btnGlowSweep * 700f) + 100f
+                                ),
+                                shape = RoundedCornerShape(28.dp)
+                            ),
+                        shape = RoundedCornerShape(28.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF00C853)
                         )
                     ) {
                         Text(
-                            text = "تسجيل الدخول",
-                            fontSize = 16.sp,
+                            text = if (licenseState is LicenseState.Active) "تسجيل الدخول" else "تسجيل الدخول بكود الاشتراك",
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-
-                    // الزر الثانوي: «ربط حساب جديد» كبسولي زجاجي مع أيقونة الباركود
-                    OutlinedButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onLinkNewAccount()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .clip(RoundedCornerShape(27.dp))
-                            .background(Color(0xCC0F1A22)),
-                        shape = RoundedCornerShape(27.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x3300E676)),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "ربط حساب جديد",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Icon(
-                                imageVector = Icons.Default.QrCode2,
-                                contentDescription = null,
-                                tint = WhatsAppGreenLight,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // عبارة التذييل الأنيقة: تجربة مختلفة.. تبدأ من هنا ⭐
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    ) {
-                        Text(
-                            text = "⭐ تجربة محترفة.. تبدأ من هنا",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF64748B)
+                            color = Color.White,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
             }
         }
 
-        // زر إعادة تشغيل حركة السبلاش في الزاوية العلوية لمنح المستخدم تجربة بصرية ممتعة
-        IconButton(
-            onClick = {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                currentPhase = if (currentPhase == SplashPhase.SPLASH_ORBITAL) {
-                    SplashPhase.LOGIN_INTERACTIVE
-                } else {
-                    SplashPhase.SPLASH_ORBITAL
+        // نافذة إدارة وتفعيل الاشتراكات الزجاجية الفاخرة
+        if (showActivationDialog) {
+            SubscriptionAuthDialog(
+                viewModel = activationViewModel,
+                onDismiss = { showActivationDialog = false },
+                onActivationSuccess = {
+                    showActivationDialog = false
+                    onLoginSuccess()
                 }
-            },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(16.dp)
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Color(0x1F00E676))
-        ) {
-            Icon(
-                imageVector = if (isLogin) Icons.Default.PlayArrow else Icons.Default.Check,
-                contentDescription = "تبديل المعاينة",
-                tint = WhatsAppGreenLight,
-                modifier = Modifier.size(18.dp)
             )
         }
     }
 }
 
 /**
- * الكبسولة المدارية العائمة (Orbital Floating Badge).
- * دائرة زجاجية عائمة تحمل أيقونة خضراء نيونية بتوهج خفيف.
+ * رسم شعار اللانهاية المتوهج (∞) لشاشة البداية
  */
 @Composable
-fun OrbitalBadge(
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0x3300E676),
-                        Color(0xCC0F1A22)
-                    )
-                )
-            )
-            .border(1.2.dp, Color(0x4D00E676), CircleShape)
-            .shadow(12.dp, CircleShape, spotColor = Color(0x6600E676)),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = WhatsAppGreenLight,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-/**
- * رسم شعار Sigma المتوهج المنحني أو رمز Infinity بواسطة Canvas بدقة فائقة.
- */
-@Composable
-fun SigmaInfinityIcon(
+private fun GlowingInfinityLogo(
     modifier: Modifier = Modifier,
-    isInfinity: Boolean = false
+    animTimeMs: Long = 0L
 ) {
-    Canvas(modifier = modifier) {
+    val pulseScale = 1.0f + (kotlin.math.sin(animTimeMs * 0.0028) * 0.05f).toFloat()
+
+    Canvas(modifier = modifier.scale(pulseScale)) {
         val w = size.width
         val h = size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val r = w * 0.22f
 
-        val strokeWidth = 5.dp.toPx()
-        val gradientBrush = Brush.linearGradient(
-            colors = listOf(
-                Color(0xFF00E676),
-                Color(0xFF00BFA5),
-                Color(0xFF00C853)
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(w, h)
-        )
-
-        val path = Path()
-
-        if (isInfinity) {
-            // رسم رمز المالانهاية الانسيابي ∞
-            val cx = w / 2f
-            val cy = h / 2f
-            val r = w * 0.22f
-
-            path.moveTo(cx, cy)
-            path.cubicTo(cx - r, cy - r * 1.5f, cx - r * 2.2f, cy - r, cx - r * 2.2f, cy)
-            path.cubicTo(cx - r * 2.2f, cy + r, cx - r, cy + r * 1.5f, cx, cy)
-            path.cubicTo(cx + r, cy - r * 1.5f, cx + r * 2.2f, cy - r, cx + r * 2.2f, cy)
-            path.cubicTo(cx + r * 2.2f, cy + r, cx + r, cy + r * 1.5f, cx, cy)
-        } else {
-            // رسم حرف S المستقبلي الخاص بـ Sigma AutoFlow
-            path.moveTo(w * 0.75f, h * 0.22f)
-            path.cubicTo(w * 0.35f, h * 0.12f, w * 0.2f, h * 0.35f, w * 0.5f, h * 0.5f)
-            path.cubicTo(w * 0.8f, h * 0.65f, w * 0.65f, h * 0.88f, w * 0.25f, h * 0.78f)
+        val path = Path().apply {
+            moveTo(cx, cy)
+            cubicTo(cx - r, cy - r * 1.5f, cx - r * 2.2f, cy - r, cx - r * 2.2f, cy)
+            cubicTo(cx - r * 2.2f, cy + r, cx - r, cy + r * 1.5f, cx, cy)
+            cubicTo(cx + r, cy - r * 1.5f, cx + r * 2.2f, cy - r, cx + r * 2.2f, cy)
+            cubicTo(cx + r * 2.2f, cy + r, cx + r, cy + r * 1.5f, cx, cy)
         }
 
+        // مسار نيون متوهج عريض
         drawPath(
             path = path,
-            brush = gradientBrush,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            color = Color(0x5500E676),
+            style = Stroke(width = 9.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // تيار البلازما الأساسي
+        drawPath(
+            path = path,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF34D399), Color(0xFF00E676), Color(0xFF06B6D4)),
+                start = Offset(0f, 0f),
+                end = Offset(w, h)
+            ),
+            style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // سلك النور الأبيض في المركز
+        drawPath(
+            path = path,
+            color = Color.White.copy(alpha = 0.85f),
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+        )
+    }
+}
+
+/**
+ * رسم شعار حرف S السيبراني المحاط بإطار سداسي وماسي دوّار لشاشة الدخول (مطابق للصورة 1)
+ */
+@Composable
+private fun CyberSMonogram(
+    modifier: Modifier = Modifier,
+    animTimeMs: Long = 0L
+) {
+    val rotHex = ((animTimeMs % 12000L).toFloat() / 12000f) * 360f
+    val rotDiamond = -(((animTimeMs % 8000L).toFloat() / 8000f) * 360f)
+    val pulseScale = 1.0f + (kotlin.math.sin(animTimeMs * 0.0031) * 0.06f).toFloat()
+
+    Canvas(modifier = modifier.scale(pulseScale)) {
+        val w = size.width
+        val h = size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val r = w * 0.44f
+
+        // 1. الإطار السداسي الدوار (Hexagon Aura)
+        val hexPath = Path()
+        for (i in 0 until 6) {
+            val angle = Math.toRadians((rotHex + (i * 60)).toDouble())
+            val px = cx + (kotlin.math.cos(angle) * r).toFloat()
+            val py = cy + (kotlin.math.sin(angle) * r).toFloat()
+            if (i == 0) hexPath.moveTo(px, py) else hexPath.lineTo(px, py)
+        }
+        hexPath.close()
+        drawPath(
+            path = hexPath,
+            color = Color(0xFF00E676).copy(alpha = 0.45f),
+            style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // 2. الإطار الماسي المعاكس (Diamond Aura)
+        val diamondPath = Path()
+        for (i in 0 until 4) {
+            val angle = Math.toRadians((rotDiamond + (i * 90) + 45).toDouble())
+            val px = cx + (kotlin.math.cos(angle) * (r * 0.88f)).toFloat()
+            val py = cy + (kotlin.math.sin(angle) * (r * 0.88f)).toFloat()
+            if (i == 0) diamondPath.moveTo(px, py) else diamondPath.lineTo(px, py)
+        }
+        diamondPath.close()
+        drawPath(
+            path = diamondPath,
+            color = Color(0xFF06B6D4).copy(alpha = 0.35f),
+            style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // 3. رسم حرف S المنحني المتوهج
+        val sPath = Path().apply {
+            moveTo(w * 0.68f, h * 0.24f)
+            cubicTo(w * 0.32f, h * 0.16f, w * 0.22f, h * 0.38f, w * 0.52f, h * 0.50f)
+            cubicTo(w * 0.78f, h * 0.62f, w * 0.68f, h * 0.86f, w * 0.30f, h * 0.78f)
+        }
+
+        // توهج خلفي ناعم لحرف S
+        drawPath(
+            path = sPath,
+            color = Color(0x6600E676),
+            style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // خط S النيوني الرئيسي
+        drawPath(
+            path = sPath,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF34D399), Color(0xFF00E676), Color(0xFF06B6D4)),
+                start = Offset(0f, 0f),
+                end = Offset(w, h)
+            ),
+            style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // لمعان مركزي أبيض
+        drawPath(
+            path = sPath,
+            color = Color.White.copy(alpha = 0.9f),
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
         )
     }
 }

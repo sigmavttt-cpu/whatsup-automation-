@@ -1146,45 +1146,48 @@ fun TabButton(
     count: Int,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tooltipText: String = ""
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) Color(0x3325D366) else Color.Transparent)
-            .border(
-                1.dp,
-                if (isSelected) WhatsAppGreen else Color.Transparent,
-                RoundedCornerShape(10.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+    com.whatsup.automation.presentation.components.AppTooltipBox(tooltipText = tooltipText) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (isSelected) WhatsAppGreen.copy(alpha = 0.22f) else Color.Transparent)
+                .border(
+                    1.dp,
+                    if (isSelected) WhatsAppGreen else Color.Transparent,
+                    RoundedCornerShape(10.dp)
+                )
+                .clickable(onClick = onClick)
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) WhatsAppGreen else TextMuted
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) WhatsAppGreenLight else TextSecondary
+                )
 
-            if (count > 0) {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (isSelected) WhatsAppGreen else TextMuted)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "$count",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkBgPrimary
-                    )
+                if (count > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(if (isSelected) WhatsAppGreen else TextMuted)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "$count",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkBgPrimary
+                        )
+                    }
                 }
             }
         }

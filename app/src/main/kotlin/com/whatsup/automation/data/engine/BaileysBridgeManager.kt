@@ -283,26 +283,30 @@ class BaileysBridgeManager @Inject constructor(
     }
 
     /**
-     * إرسال تأكيد مشاهدة الحالة
+     * إرسال تأكيد مشاهدة الحالة (يدعم وضع التخفي Ghost Mode افتراضياً)
      */
-    suspend fun markStatusViewed(statusId: String, senderPhone: String): Boolean {
+    suspend fun markStatusViewed(statusId: String, senderPhone: String, sendReceipt: Boolean = false): Boolean {
         val cmd = JSONObject().apply {
             put("action", "VIEW_STATUS")
             put("statusId", statusId)
             put("senderPhone", senderPhone)
+            put("ghostMode", !sendReceipt)
+            put("sendReceipt", sendReceipt)
         }
         return sendCommand(cmd)
     }
 
     /**
-     * إرسال تفاعل إيموجي على الحالة
+     * إرسال تفاعل إيموجي على الحالة (رياكشن رسمي على سيرفر الستوري دون إرسال أي رسائل إلى الشات الخاص)
      */
-    suspend fun reactToStatus(statusId: String, senderPhone: String, emoji: String): Boolean {
+    suspend fun reactToStatus(statusId: String, senderPhone: String, emoji: String, sendAsChatReply: Boolean = false): Boolean {
         val cmd = JSONObject().apply {
             put("action", "REACT_STATUS")
             put("statusId", statusId)
             put("senderPhone", senderPhone)
             put("emoji", emoji)
+            put("sendAsChatReply", false)
+            put("ghostMode", false)
         }
         return sendCommand(cmd)
     }

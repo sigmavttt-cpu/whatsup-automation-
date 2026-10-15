@@ -283,8 +283,8 @@ class StatusRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteExpiredDeletedStatuses() {
-        val oneHourAgo = System.currentTimeMillis() - 3600_000L
-        statusDao.deleteExpiredDeletedStatuses(oneHourAgo)
+        val twentyFourHoursAgo = System.currentTimeMillis() - (24 * 3600_000L)
+        statusDao.deleteExpiredDeletedStatuses(twentyFourHoursAgo)
     }
 }
 

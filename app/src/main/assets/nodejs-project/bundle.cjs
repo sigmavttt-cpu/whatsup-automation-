@@ -170954,7 +170954,7 @@ async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH_FOLDER
     participant: msg.key.participant || senderJid
   });
 }
-async function viewStatus(sock2, statusId, senderPhone = "", participantInput = "", authFolder = CONFIG.DEFAULT_AUTH_FOLDER) {
+async function viewStatus(sock2, statusId, senderPhone = "", participantInput = "", authFolder = CONFIG.DEFAULT_AUTH_FOLDER, options = {}) {
   if (!sock2 || !statusId) return;
   try {
     const originalKey = statusKeysMap.get(statusId);
@@ -170978,13 +170978,16 @@ async function viewStatus(sock2, statusId, senderPhone = "", participantInput = 
         participant: targetParticipant,
         fromMe: false
       };
-      try {
-        await sock2.sendReceipt("status@broadcast", targetParticipant, [statusId], "read");
-      } catch (_) {
-      }
-      try {
-        await sock2.readMessages([readKey]);
-      } catch (_) {
+      const isGhost = typeof options === "object" && options.ghostMode === true;
+      if (!isGhost) {
+        try {
+          await sock2.sendReceipt("status@broadcast", targetParticipant, [statusId], "read");
+        } catch (_) {
+        }
+        try {
+          await sock2.readMessages([readKey]);
+        } catch (_) {
+        }
       }
       const pushName = originalKey?.pushName || getContactName(resolved.phone) || "";
       emitToAndroid("STATUS_VIEWED", {
@@ -170994,7 +170997,8 @@ async function viewStatus(sock2, statusId, senderPhone = "", participantInput = 
         lid: resolved.lid,
         senderName: pushName,
         participant: targetParticipant,
-        success: true
+        success: true,
+        isGhost: !!isGhost
       });
     } else {
       emitToAndroid("ERROR", { error: `\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0646\u0627\u0634\u0631 \u0627\u0644\u062D\u0627\u0644\u0629 ${statusId} \u0644\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0645\u0634\u0627\u0647\u062F\u0629` });
@@ -171003,7 +171007,7 @@ async function viewStatus(sock2, statusId, senderPhone = "", participantInput = 
     emitToAndroid("ERROR", { error: `\u0641\u0634\u0644 \u062A\u0633\u062C\u064A\u0644 \u0645\u0634\u0627\u0647\u062F\u0629 \u0627\u0644\u062D\u0627\u0644\u0629: ${viewErr.message || viewErr}` });
   }
 }
-async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "", participantInput = "", authFolder = CONFIG.DEFAULT_AUTH_FOLDER) {
+async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "", participantInput = "", authFolder = CONFIG.DEFAULT_AUTH_FOLDER, options = {}) {
   if (!sock2 || !statusId) return;
   try {
     const originalKey = statusKeysMap.get(statusId);
@@ -171059,7 +171063,8 @@ async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "
       reactionKey,
       reactionMsg,
       statusJidList,
-      receiptSuccess
+      receiptSuccess,
+      isGhost: false
     });
     await new Promise((r) => setTimeout(r, 600));
     recordStage(statusId, "BAILEYS_SEND", "status-manager.js", "reactStatus", {
@@ -171095,7 +171100,7 @@ async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "
     }
     const resolved = await resolvePhoneAndLid(normalizedParticipant || senderPhone, null, sock2);
     const pushName = originalKey?.pushName || getContactName(resolved.phone) || "";
-    console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${normalizedParticipant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}`);
+    console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${normalizedParticipant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}, chatReply=DISABLED`);
     emitToAndroid("STATUS_REACTED", {
       id: statusId,
       senderPhone: resolved.phone,
@@ -171105,7 +171110,9 @@ async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "
       participant: normalizedParticipant,
       emoji: emoji || "\u{1F49A}",
       success: !!sendResult,
-      receiptSuccess
+      receiptSuccess,
+      manualChatReply: false,
+      isGhost: false
     });
     printTimelineReport(statusId);
   } catch (err) {
@@ -171299,21 +171306,30 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
         case "VIEW_STATUS": {
           if (sock2) {
             const statusId = command.statusId || command.id;
-            await viewStatus(sock2, statusId, command.senderPhone, command.participant, authFolder);
+            const options = {
+              ghostMode: command.ghostMode === true,
+              sendReadReceipt: command.sendReceipt === true
+            };
+            await viewStatus(sock2, statusId, command.senderPhone, command.participant, authFolder, options);
           }
           break;
         }
         case "REACT_STATUS": {
           if (sock2) {
             const statusId = command.statusId || command.id;
+            const options = {
+              ghostMode: false,
+              sendAsChatReply: false
+            };
             recordStage(statusId, "DISPATCHER", "command-dispatcher.js", "processCommandLine", {
               action: "REACT_STATUS",
               statusId,
               senderPhone: command.senderPhone,
               participant: command.participant,
-              emoji: command.emoji
+              emoji: command.emoji,
+              options
             });
-            await reactStatus(sock2, statusId, command.emoji || "\u{1F49A}", command.senderPhone, command.participant, authFolder);
+            await reactStatus(sock2, statusId, command.emoji || "\u{1F49A}", command.senderPhone, command.participant, authFolder, options);
           }
           break;
         }

@@ -85,6 +85,7 @@ fun AddMemberDialog(
                         title = "من دفتر الهاتف",
                         count = 0,
                         isSelected = selectedTab == 0,
+                        tooltipText = "استيراد واختيار جهات الاتصال من دفتر الهاتف",
                         onClick = { selectedTab = 0 },
                         modifier = Modifier.weight(1f)
                     )
@@ -92,6 +93,7 @@ fun AddMemberDialog(
                         title = "إدخال يدوي",
                         count = 0,
                         isSelected = selectedTab == 1,
+                        tooltipText = "كتابة الاسم ورقم الهاتف يدوياً وإضافته للحملة",
                         onClick = { selectedTab = 1 },
                         modifier = Modifier.weight(1f)
                     )

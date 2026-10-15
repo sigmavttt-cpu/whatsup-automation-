@@ -43,7 +43,8 @@ class WhatsAppEngine @Inject constructor(
     private val logRepository: LogRepository,
     private val deviceContactsManager: com.whatsup.automation.data.local.contacts.DeviceContactsManager,
     private val outboxDao: com.whatsup.automation.data.local.dao.OutboxDao,
-    private val vaultRepository: com.whatsup.automation.domain.repository.VaultRepository
+    private val vaultRepository: com.whatsup.automation.domain.repository.VaultRepository,
+    private val statusDao: com.whatsup.automation.data.local.dao.StatusDao
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -464,14 +465,16 @@ class WhatsAppEngine @Inject constructor(
     }
 
     /**
-     * إرسال تأكيد مشاهدة الحالة إلى واتساب.
+     * إرسال تأكيد مشاهدة الحالة إلى واتساب (يدعم وضع التخفي Ghost Mode).
      */
-    suspend fun markStatusViewed(statusId: String, senderPhone: String = "", participant: String? = null): Boolean {
-        logDiagnosticEvent("STATUS", "Marking status $statusId viewed (sender: $senderPhone, participant: $participant)")
+    suspend fun markStatusViewed(statusId: String, senderPhone: String = "", participant: String? = null, sendReceipt: Boolean = false): Boolean {
+        logDiagnosticEvent("STATUS", "Marking status $statusId viewed (sender: $senderPhone, participant: $participant, sendReceipt: $sendReceipt)")
         val cmd = org.json.JSONObject().apply {
             put("action", "VIEW_STATUS")
             put("statusId", statusId)
             put("senderPhone", senderPhone)
+            put("ghostMode", !sendReceipt)
+            put("sendReceipt", sendReceipt)
             if (!participant.isNullOrBlank()) {
                 put("participant", participant)
             }
@@ -480,15 +483,17 @@ class WhatsAppEngine @Inject constructor(
     }
 
     /**
-     * إرسال تفاعل إيموجي على الحالة إلى واتساب.
+     * إرسال تفاعل إيموجي على الحالة إلى واتساب (رياكشن رسمي على سيرفر الستوري دون إرسال أي رسائل للشات الخاص).
      */
-    suspend fun reactToStatus(statusId: String, emoji: String = "💚", senderPhone: String = "", participant: String? = null): Boolean {
-        logDiagnosticEvent("STATUS", "Reacting $emoji to status $statusId (sender: $senderPhone, participant: $participant)")
+    suspend fun reactToStatus(statusId: String, emoji: String = "💚", senderPhone: String = "", participant: String? = null, sendAsChatReply: Boolean = false): Boolean {
+        logDiagnosticEvent("STATUS", "Reacting $emoji to status $statusId (sender: $senderPhone, participant: $participant, sendAsChatReply: false)")
         val cmd = org.json.JSONObject().apply {
             put("action", "REACT_STATUS")
             put("statusId", statusId)
             put("senderPhone", senderPhone)
             put("emoji", emoji)
+            put("sendAsChatReply", false)
+            put("ghostMode", false)
             if (!participant.isNullOrBlank()) {
                 put("participant", participant)
             }
@@ -798,7 +803,10 @@ class WhatsAppEngine @Inject constructor(
                     val senderPhone = data.optString("senderPhone", "")
                     scope.launch {
                         vaultRepository.markMessageAsDeleted(revokedId)
-                        logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة وحفظها في الخزينة: $revokedId ($senderPhone)")
+                        try {
+                            statusDao.markAsDeleted(revokedId, System.currentTimeMillis())
+                        } catch (_: Exception) {}
+                        logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة/حالة وحفظها في الخزينة: $revokedId ($senderPhone)")
                     }
                 }
             }

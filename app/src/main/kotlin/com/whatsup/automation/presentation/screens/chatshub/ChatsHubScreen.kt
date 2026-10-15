@@ -134,10 +134,10 @@ fun ChatsHubScreen(
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFFFFFFF),
-                unfocusedContainerColor = Color(0xFFFFFFFF),
+                focusedContainerColor = DarkSurface,
+                unfocusedContainerColor = DarkSurface,
                 focusedBorderColor = WhatsAppGreen,
-                unfocusedBorderColor = Color(0x3300A884),
+                unfocusedBorderColor = Color(0x3300E676),
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary
             )
@@ -263,54 +263,62 @@ fun ChatsHubScreen(
             items(tabs) { (tab, count, color) ->
                 val isSelected = uiState.selectedTab == tab
                 val bgTint by animateColorAsState(
-                    targetValue = if (isSelected) color.copy(alpha = 0.14f) else Color(0xFFFFFFFF),
+                    targetValue = if (isSelected) color.copy(alpha = 0.16f) else DarkSurface,
                     animationSpec = tween(200),
                     label = "tabBg"
                 )
                 val borderBrush = if (isSelected) {
                     Brush.horizontalGradient(listOf(color, color.copy(alpha = 0.6f)))
                 } else {
-                    Brush.horizontalGradient(listOf(Color(0x2200A884), Color(0x2200A884)))
+                    Brush.horizontalGradient(listOf(Color(0x3300E676), Color(0x3300B0FF)))
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(bgTint)
-                        .border(1.dp, borderBrush, RoundedCornerShape(20.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            viewModel.selectTab(tab)
-                        }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = tab.title,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) color else TextSecondary
-                        )
+                val tooltipText = when (tab) {
+                    ChatsHubTab.UNREGISTERED -> "الأرقام التي تواصلت معك ولم تُحفظ في دفتر الهاتف بعد ($count رقم)"
+                    ChatsHubTab.REGISTERED_ALL -> "كافة جهات الاتصال المسجلة في هاتفك ($count جهة)"
+                    ChatsHubTab.REGISTERED_TODAY -> "جهات الاتصال التي تم حفظها تلقائياً اليوم ($count جهة)"
+                }
 
-                        // Badge عداد التبويب
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) color else Color(0x1A00A884))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                com.whatsup.automation.presentation.components.AppTooltipBox(tooltipText = tooltipText) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(bgTint)
+                            .border(1.dp, borderBrush, RoundedCornerShape(20.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.selectTab(tab)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = count.toString(),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else TextPrimary
+                                text = tab.title,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) color else TextSecondary
                             )
+
+                            // Badge عداد التبويب
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) color else Color(0x1A00E676))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = count.toString(),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else TextPrimary
+                                )
+                            }
                         }
                     }
                 }

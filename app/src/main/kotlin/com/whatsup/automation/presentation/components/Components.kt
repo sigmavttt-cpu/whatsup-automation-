@@ -772,3 +772,47 @@ fun ServiceHealthCard(
     }
 }
 
+/**
+ * مكون التلميحات الفاخر (Glassmorphic Luxury Tooltip).
+ * يوفر تلميحاً إرشادياً ذكياً يظهر عند الضغط المطول أو النقر على الأيقونات والأزرار.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppTooltipBox(
+    tooltipText: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    if (tooltipText.isBlank()) {
+        content()
+        return
+    }
+
+    val tooltipState = rememberTooltipState(isPersistent = false)
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(spacingBetweenTooltipAndAnchor = 6.dp),
+        tooltip = {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = DarkBgSecondary.copy(alpha = 0.95f),
+                border = BorderStroke(1.dp, Brush.horizontalGradient(listOf(WhatsAppGreen.copy(alpha = 0.6f), CyberCyan.copy(alpha = 0.6f)))),
+                shadowElevation = 8.dp,
+                modifier = Modifier.padding(horizontal = 6.dp)
+            ) {
+                Text(
+                    text = tooltipText,
+                    color = TextPrimary,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        },
+        state = tooltipState,
+        modifier = modifier
+    ) {
+        content()
+    }
+}
+
+

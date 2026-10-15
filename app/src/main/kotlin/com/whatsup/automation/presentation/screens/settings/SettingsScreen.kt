@@ -114,26 +114,6 @@ fun SettingsScreen(
                         modifier = Modifier.size(24.dp)
                     )
                 }
-
-                // زر استعراض شاشة الترحيب والسبلاش السينمائية
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onNavigateToSplashAuth()
-                    },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x1F00E676))
-                        .border(1.dp, Color(0x3300E676), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "شاشة الترحيب",
-                        tint = WhatsAppGreenLight,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
             }
 
             // =========================================================================
@@ -206,10 +186,10 @@ fun SettingsScreen(
 
                 SettingsRowDivider()
 
-                // 6. عن التطبيق (الإصدار 2.0.0)
+                // 6. عن التطبيق
                 GroupedSettingsRow(
                     title = "عن التطبيق",
-                    subtitle = "الإصدار 2.0.0",
+                    subtitle = "الإصدار 8.3.0",
                     icon = Icons.Outlined.Info,
                     isLast = true,
                     onClick = {
@@ -366,7 +346,7 @@ fun SettingsScreen(
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text("Sigma AutoFlow", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("الإصدار 2.0.0 (V8.3.0 Engine)", color = WhatsAppGreenLight, fontSize = 13.sp)
+                    Text("الإصدار 8.3.0", color = WhatsAppGreenLight, fontSize = 13.sp)
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = "المنظومة الاحترافية لأتمتة واتساب والردود الذكية وإدارة الحالات محلياً 100%.",

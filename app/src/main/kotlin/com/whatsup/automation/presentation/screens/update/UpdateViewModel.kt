@@ -116,10 +116,14 @@ class UpdateViewModel @Inject constructor(
                         )
                     }
                 } else {
-                    _uiState.value = UpdateUiState.UpToDate(
-                        currentVersionCode = currentCode,
-                        currentVersionName = currentName
-                    )
+                    if (isManual) {
+                        _uiState.value = UpdateUiState.UpToDate(
+                            currentVersionCode = currentCode,
+                            currentVersionName = currentName
+                        )
+                    } else {
+                        _uiState.value = UpdateUiState.Idle
+                    }
                 }
             } else {
                 val exc = result.exceptionOrNull()

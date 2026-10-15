@@ -215,7 +215,11 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                 case 'VIEW_STATUS': {
                     if (sock) {
                         const statusId = command.statusId || command.id;
-                        await viewStatus(sock, statusId, command.senderPhone, command.participant, authFolder);
+                        const options = {
+                            ghostMode: command.ghostMode === true,
+                            sendReadReceipt: command.sendReceipt === true
+                        };
+                        await viewStatus(sock, statusId, command.senderPhone, command.participant, authFolder, options);
                     }
                     break;
                 }
@@ -223,14 +227,19 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                 case 'REACT_STATUS': {
                     if (sock) {
                         const statusId = command.statusId || command.id;
+                        const options = {
+                            ghostMode: false,
+                            sendAsChatReply: false
+                        };
                         recordStage(statusId, 'DISPATCHER', 'command-dispatcher.js', 'processCommandLine', {
                             action: 'REACT_STATUS',
                             statusId,
                             senderPhone: command.senderPhone,
                             participant: command.participant,
-                            emoji: command.emoji
+                            emoji: command.emoji,
+                            options
                         });
-                        await reactStatus(sock, statusId, command.emoji || '💚', command.senderPhone, command.participant, authFolder);
+                        await reactStatus(sock, statusId, command.emoji || '💚', command.senderPhone, command.participant, authFolder, options);
                     }
                     break;
                 }

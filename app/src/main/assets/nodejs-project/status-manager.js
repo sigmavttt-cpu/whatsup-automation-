@@ -164,7 +164,7 @@ export async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH
 /**
  * Marks a status as viewed and sends read receipts.
  */
-export async function viewStatus(sock, statusId, senderPhone = '', participantInput = '', authFolder = CONFIG.DEFAULT_AUTH_FOLDER) {
+export async function viewStatus(sock, statusId, senderPhone = '', participantInput = '', authFolder = CONFIG.DEFAULT_AUTH_FOLDER, options = {}) {
     if (!sock || !statusId) return;
 
     try {
@@ -193,15 +193,21 @@ export async function viewStatus(sock, statusId, senderPhone = '', participantIn
                 fromMe: false
             };
 
-            // 1. Explicit read receipt to publisher's exact JID
-            try {
-                await sock.sendReceipt('status@broadcast', targetParticipant, [statusId], 'read');
-            } catch (_) {}
+            // Ghost Mode Support:
+            // When ghostMode is true, we DO NOT send read receipts to WhatsApp,
+            // so the status update remains untouched in the official WhatsApp app on the user's phone!
+            const isGhost = (typeof options === 'object' && options.ghostMode === true);
+            if (!isGhost) {
+                // 1. Explicit read receipt to publisher's exact JID
+                try {
+                    await sock.sendReceipt('status@broadcast', targetParticipant, [statusId], 'read');
+                } catch (_) {}
 
-            // 2. Read confirmation in Baileys local state
-            try {
-                await sock.readMessages([readKey]);
-            } catch (_) {}
+                // 2. Read confirmation in Baileys local state
+                try {
+                    await sock.readMessages([readKey]);
+                } catch (_) {}
+            }
 
             const pushName = originalKey?.pushName || getContactName(resolved.phone) || '';
 
@@ -212,7 +218,8 @@ export async function viewStatus(sock, statusId, senderPhone = '', participantIn
                 lid: resolved.lid,
                 senderName: pushName,
                 participant: targetParticipant,
-                success: true
+                success: true,
+                isGhost: !!isGhost
             });
         } else {
             emitToAndroid('ERROR', { error: `لم يتم العثور على ناشر الحالة ${statusId} لتأكيد المشاهدة` });
@@ -231,7 +238,7 @@ export async function viewStatus(sock, statusId, senderPhone = '', participantIn
  * 3. The reaction key MUST use the original status message key exactly as received.
  * 4. Read receipts are sent first to register the view alongside the reaction.
  */
-export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = '', participantInput = '', authFolder = CONFIG.DEFAULT_AUTH_FOLDER) {
+export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = '', participantInput = '', authFolder = CONFIG.DEFAULT_AUTH_FOLDER, options = {}) {
     if (!sock || !statusId) return;
 
     try {
@@ -283,7 +290,7 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
         // Strict Single-JID list: target participant only
         const statusJidList = [normalizedParticipant];
 
-        // 1. Send read receipt first
+        // 1. Send official read receipt to publisher's exact JID so WhatsApp registers the viewer and the reaction
         let receiptSuccess = false;
         try {
             await sock.sendReceipt('status@broadcast', normalizedParticipant, [statusId], 'read');
@@ -302,7 +309,8 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
             reactionKey,
             reactionMsg,
             statusJidList,
-            receiptSuccess
+            receiptSuccess,
+            isGhost: false
         });
 
         // Wait 600ms protocol delay
@@ -313,7 +321,7 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
             options: { statusJidList }
         });
 
-        // 2. Send reaction with statusJidList = [originalKey.participant]
+        // 2. Send reaction with statusJidList = [originalKey.participant] to status@broadcast ONLY
         let sendResult = null;
         let sendError = null;
         try {
@@ -347,7 +355,8 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
         const resolved = await resolvePhoneAndLid(normalizedParticipant || senderPhone, null, sock);
         const pushName = originalKey?.pushName || getContactName(resolved.phone) || '';
 
-        console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${normalizedParticipant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}`);
+        // 3. ZERO DM SIDE-EFFECTS: No chat messages sent to private conversations
+        console.log(`[reactStatus] AUDIT: statusId=${statusId}, participant=${normalizedParticipant}, statusJidList=${JSON.stringify(statusJidList)}, receiptSuccess=${receiptSuccess}, sendSuccess=${!!sendResult}, chatReply=DISABLED`);
 
         emitToAndroid('STATUS_REACTED', {
             id: statusId,
@@ -358,7 +367,9 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
             participant: normalizedParticipant,
             emoji: emoji || '💚',
             success: !!sendResult,
-            receiptSuccess: receiptSuccess
+            receiptSuccess: receiptSuccess,
+            manualChatReply: false,
+            isGhost: false
         });
 
         // Print final trace timeline report

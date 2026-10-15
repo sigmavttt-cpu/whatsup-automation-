@@ -25,27 +25,27 @@ val CheckmarkGreen = Color(0xFF00C853)
 val CheckmarkGlow = Color(0x3300C853)
 val CheckmarkCyan = Color(0xFF00B0FF)
 
-// خلفيات نقية وعصرية عالية التباين (High-Contrast Slate & Crisp White Surfaces)
-val DarkBgPrimary = Color(0xFFF1F5F9) // رمادي جليدي أنيق وفائق التباين
-val DarkBgSecondary = Color(0xFFE2E8F0)
-val DarkBgTertiary = Color(0xFFCBD5E1)
-val DarkSurface = Color(0xFFFFFFFF) // بطاقات بيضاء ناصعة
+// خلفيات كربونية داكنة فائقة الفخامة مطابقة لشاشة الدخول (Deep Obsidian & Carbon Surfaces)
+val DarkBgPrimary = Color(0xFF060D12) // أسود كربوني نيلي فائق العمق مطابق للسبلاش والدخول
+val DarkBgSecondary = Color(0xFF0B141B) // أردوازي ليلي عميق
+val DarkBgTertiary = Color(0xFF111E27)
+val DarkSurface = Color(0xFF0F1A22) // بطاقات كربونية زجاجية فاخرة
 val DarkBgCard = DarkSurface
-val DarkSurfaceHover = Color(0xFFF8FAFC)
-val DarkSurfaceElevated = Color(0xFFFFFFFF)
+val DarkSurfaceHover = Color(0xFF162530)
+val DarkSurfaceElevated = Color(0xFF14212C)
 
 // زجاج وأغشية بحدود نيون عصرية (Cyber Glass Borders)
-val GlassFill = Color(0x0C00B0FF)
-val GlassBorder = Color(0x4D00B0FF) // حدود سيان متألقة واضحة جداً
-val GlassBorderSubtle = Color(0x2600C853)
-val GlassFillSubtle = Color(0x0600C853)
-val GlassBorderHighlight = Color(0x9900B0FF)
+val GlassFill = Color(0x1F0F1A22)
+val GlassBorder = Color(0x3300E676) // حدود نيون زمردية متألقة
+val GlassBorderSubtle = Color(0x1A00E676)
+val GlassFillSubtle = Color(0x0F00E676)
+val GlassBorderHighlight = Color(0x6600E676)
 
-// نصوص عالية التباين والوضوح التام (Ultra-Sharp Carbon Typography)
-val TextPrimary = Color(0xFF020617) // أسود كربوني نقي 100% للخطوط والعناوين
-val TextSecondary = Color(0xFF334155) // أردوازي داكن مقروء بوضوح فائق
-val TextMuted = Color(0xFF64748B)
-val TextHint = Color(0xFF94A3B8)
+// نصوص مضيئة عالية التباين والوضوح التام (Ultra-Legible Luminous Typography)
+val TextPrimary = Color(0xFFFFFFFF) // أبيض ناصع مضيء فائق الوضوح 100%
+val TextSecondary = Color(0xFFCBD5E1) // رمادي فضي ساطع مقروء بوضوح تام ضد الخلفية المظلمة
+val TextMuted = Color(0xFF94A3B8) // رمادي متوسط واضح
+val TextHint = Color(0xFF64748B)
 
 // تدرجات لونية زمردية وبيضاء وسيبرانية
 val EmeraldGradient = Brush.horizontalGradient(
@@ -61,11 +61,11 @@ val NeonPurpleGradient = Brush.linearGradient(
 )
 
 val BackgroundGradient = Brush.verticalGradient(
-    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFE2E8F0))
+    colors = listOf(Color(0xFF060D12), Color(0xFF0B141B), Color(0xFF060D12))
 )
 
 val GlassCardGradient = Brush.verticalGradient(
-    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9))
+    colors = listOf(Color(0xCC0F1A22), Color(0xCC0B141B))
 )
 
 object ObsidianGlowBorder {

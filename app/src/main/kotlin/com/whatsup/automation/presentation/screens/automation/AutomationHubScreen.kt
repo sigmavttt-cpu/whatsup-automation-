@@ -59,7 +59,7 @@ fun AutomationHubScreen(
             .fillMaxSize()
             .background(DarkBgPrimary)
     ) {
-        // شريط التبويبات الفخم بتصميم White Emerald Glass
+        // شريط التبويبات الفخم بتصميم Cyber Jade Glassmorphic
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -69,8 +69,8 @@ fun AutomationHubScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFFFFFFFF))
-                    .border(1.dp, Color(0x3300A884), RoundedCornerShape(20.dp))
+                    .background(DarkSurface)
+                    .border(1.dp, Brush.horizontalGradient(listOf(Color(0x3300E676), Color(0x3300B0FF))), RoundedCornerShape(20.dp))
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -82,39 +82,49 @@ fun AutomationHubScreen(
                         Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(bgBrush)
-                            .clickable {
-                                if (!isSelected) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    selectedTab = tab
-                                }
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    com.whatsup.automation.presentation.components.AppTooltipBox(
+                        tooltipText = if (tab == AutomationTab.RULES) "إدارة قواعد الرد التلقائي والتسجيل وحفظ الأرقام" else "إدارة مجموعات البث والحملات والإرسال الجماعي",
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(bgBrush)
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(16.dp))
+                                    } else Modifier
+                                )
+                                .clickable {
+                                    if (!isSelected) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        selectedTab = tab
+                                    }
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.title,
-                                tint = if (isSelected) Color.White else WhatsAppGreenDark,
-                                modifier = Modifier.size(17.dp)
-                            )
-                            Text(
-                                text = tab.title,
-                                fontSize = 12.5.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextPrimary,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = tab.title,
+                                    tint = if (isSelected) Color.White else WhatsAppGreenLight,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Text(
+                                    text = tab.title,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else TextPrimary,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

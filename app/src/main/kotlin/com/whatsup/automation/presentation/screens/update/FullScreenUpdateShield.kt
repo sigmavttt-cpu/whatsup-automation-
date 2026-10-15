@@ -53,10 +53,10 @@ fun FullScreenUpdateShield(
             // يمكن إظهار مؤشر خفيف اختياري
         }
         is UpdateUiState.UpToDate -> {
-            UpToDateDialog(
-                currentVersion = state.currentVersionName,
-                onDismiss = { viewModel.dismissOptionalUpdate() }
-            )
+            // شاشة "التطبيق محدث" محجوبة تماماً بناءً على طلب المستخدم الصريح
+            LaunchedEffect(Unit) {
+                viewModel.dismissOptionalUpdate()
+            }
         }
         is UpdateUiState.UpdateAvailable -> {
             if (state.isMandatory) {

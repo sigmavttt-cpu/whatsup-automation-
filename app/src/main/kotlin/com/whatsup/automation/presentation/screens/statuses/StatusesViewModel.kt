@@ -371,4 +371,73 @@ class StatusesViewModel @Inject constructor(
             forceRefreshTrigger.value = System.currentTimeMillis()
         }
     }
+
+    /**
+     * حفظ وتنزيل وسائط الحالة أو نسخ نصها إلى الحافظة.
+     */
+    fun downloadStatus(
+        context: android.content.Context,
+        status: StatusStory,
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // إذا كانت الحالة نصية: يتم نسخ النص فوراً إلى حافظة الهاتف
+                if (status.mediaType == StatusMediaType.TEXT && !status.textContent.isNullOrBlank()) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        try {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("WhatsApp Status", status.textContent)
+                            clipboard.setPrimaryClip(clip)
+                            onResult(true, "تم نسخ نص الحالة إلى الحافظة بنجاح 📋")
+                        } catch (e: Exception) {
+                            onResult(false, "تعذر نسخ النص: ${e.localizedMessage}")
+                        }
+                    }
+                    return@launch
+                }
+
+                // إذا كانت وسائط أو مستندات: حفظ في مجلد الصور أو التنزيلات
+                val mediaPath = status.mediaUrl
+                if (!mediaPath.isNullOrBlank() && java.io.File(mediaPath).exists()) {
+                    val srcFile = java.io.File(mediaPath)
+                    val ext = srcFile.extension.ifBlank {
+                        if (status.mediaType == StatusMediaType.VIDEO) "mp4" else "jpg"
+                    }
+                    val targetDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
+                    val statusFolder = java.io.File(targetDir, "WhatsUp_Statuses")
+                    if (!statusFolder.exists()) statusFolder.mkdirs()
+                    val destFile = java.io.File(statusFolder, "status_${System.currentTimeMillis()}.$ext")
+                    srcFile.copyTo(destFile, overwrite = true)
+
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(destFile.absolutePath),
+                        null,
+                        null
+                    )
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onResult(true, "تم حفظ الحالة بنجاح 📥")
+                    }
+                } else if (!status.textContent.isNullOrBlank()) {
+                    // إذا نص ولكن لم يكن مصنفاً كـ TEXT: نسخ للحافظة أيضاً
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("WhatsApp Status", status.textContent)
+                        clipboard.setPrimaryClip(clip)
+                        onResult(true, "تم نسخ نص الحالة إلى الحافظة بنجاح 📋")
+                    }
+                } else {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onResult(true, "تم حفظ الحالة بنجاح 📥")
+                    }
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onResult(false, "تعذر حفظ الحالة: ${e.localizedMessage ?: "خطأ غير متوقع"}")
+                }
+            }
+        }
+    }
 }
+

@@ -38,8 +38,8 @@ fun WhatsUpTheme(
                 window.statusBarColor = DarkBgPrimary.toArgb()
                 window.navigationBarColor = DarkBgPrimary.toArgb()
                 val controller = WindowCompat.getInsetsController(window, view)
-                controller.isAppearanceLightStatusBars = true
-                controller.isAppearanceLightNavigationBars = true
+                controller.isAppearanceLightStatusBars = false
+                controller.isAppearanceLightNavigationBars = false
             }
         }
     }

@@ -14,14 +14,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -139,28 +140,6 @@ class MainActivity : ComponentActivity() {
                         contract = ActivityResultContracts.RequestMultiplePermissions()
                     ) { _ -> }
 
-                    LaunchedEffect(Unit) {
-                        val hasAll = permissionsToRequest.all {
-                            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-                        }
-                        if (!hasAll) {
-                            permissionLauncher.launch(permissionsToRequest)
-                        }
-
-                        // فحص وطلب استثناء تحسين استهلاك البطارية لضمان الحصانة الدائمة في الخلفية
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-                            if (powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false) {
-                                try {
-                                    val batteryIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                        data = Uri.parse("package:${context.packageName}")
-                                    }
-                                    context.startActivity(batteryIntent)
-                                } catch (_: Exception) {}
-                            }
-                        }
-                    }
-
                     val updateViewModel: com.whatsup.automation.presentation.screens.update.UpdateViewModel = hiltViewModel()
                     val activationViewModel: com.whatsup.automation.presentation.screens.activation.ActivationViewModel = hiltViewModel()
                     val licenseState by activationViewModel.licenseState.collectAsState()
@@ -171,6 +150,34 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val navController = rememberNavController()
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+                    val isSplashAuth = currentRoute == Screen.SplashAuth.route
+
+                    LaunchedEffect(currentRoute) {
+                        if (currentRoute == Screen.Dashboard.route) {
+                            val hasAll = permissionsToRequest.all {
+                                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                            }
+                            if (!hasAll) {
+                                permissionLauncher.launch(permissionsToRequest)
+                            }
+
+                            // فحص وطلب استثناء تحسين استهلاك البطارية لضمان الحصانة الدائمة في الخلفية
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                                if (powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false) {
+                                    try {
+                                        val batteryIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                        context.startActivity(batteryIntent)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        }
+                    }
+
                     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                     val scope = rememberCoroutineScope()
                     var showLockSettingsDialog by remember { mutableStateOf(false) }
@@ -192,10 +199,6 @@ class MainActivity : ComponentActivity() {
                         }
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            val navBackStackEntry by navController.currentBackStackEntryAsState()
-                            val currentRoute = navBackStackEntry?.destination?.route
-                            val isSplashAuth = currentRoute == Screen.SplashAuth.route
-
                             Scaffold(
                                 modifier = Modifier.fillMaxSize(),
                                 containerColor = DarkBgPrimary,
@@ -212,7 +215,11 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     NavHost(
                                         navController = navController,
-                                        startDestination = Screen.SplashAuth.route
+                                        startDestination = Screen.SplashAuth.route,
+                                        enterTransition = { fadeIn(animationSpec = tween(220)) },
+                                        exitTransition = { fadeOut(animationSpec = tween(180)) },
+                                        popEnterTransition = { fadeIn(animationSpec = tween(220)) },
+                                        popExitTransition = { fadeOut(animationSpec = tween(180)) }
                                     ) {
                                         composable(Screen.SplashAuth.route) {
                                             com.whatsup.automation.presentation.screens.auth.SplashAuthScreen(
@@ -225,7 +232,8 @@ class MainActivity : ComponentActivity() {
                                                     navController.navigate(Screen.Pairing.route) {
                                                         popUpTo(Screen.SplashAuth.route) { inclusive = true }
                                                     }
-                                                }
+                                                },
+                                                activationViewModel = activationViewModel
                                             )
                                         }
 
@@ -246,7 +254,8 @@ class MainActivity : ComponentActivity() {
                                                 viewModel = viewModel,
                                                 onNavigateToPairing = { navController.navigate(Screen.System.route) },
                                                 onNavigateToRules = { navController.navigate(Screen.Automation.route) },
-                                                onNavigateToLogs = { navController.navigate(Screen.System.route) }
+                                                onNavigateToLogs = { navController.navigate(Screen.System.route) },
+                                                onOpenDrawer = { scope.launch { drawerState.open() } }
                                             )
                                         }
 
@@ -330,27 +339,33 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
-                                    // زر القائمة الجانبية العائم الفاخر (Floating Drawer Trigger) يظهر فقط خارج شاشة الدخول
-                                    if (!isSplashAuth) {
-                                        Box(
+                                    // زر القائمة الجانبية في شريط الرأس العلوي (Top Header Drawer Trigger) خارج شاشة الدخول والشاشة الرئيسية
+                                    if (!isSplashAuth && currentRoute != Screen.Dashboard.route) {
+                                        com.whatsup.automation.presentation.components.AppTooltipBox(
+                                            tooltipText = "فتح القائمة الجانبية للتطبيق",
                                             modifier = Modifier
-                                                .padding(bottom = 86.dp, start = 16.dp)
-                                                .align(Alignment.BottomStart)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFFFFFFFF))
-                                                .border(1.5.dp, Color(0x6600A884), CircleShape)
-                                                .size(46.dp)
+                                                .statusBarsPadding()
+                                                .padding(top = 10.dp, start = 16.dp)
+                                                .align(Alignment.TopStart)
                                         ) {
-                                            IconButton(
-                                                onClick = { scope.launch { drawerState.open() } },
-                                                modifier = Modifier.fillMaxSize()
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xD90F1A22))
+                                                    .border(1.2.dp, Color(0x6600E676), CircleShape)
+                                                    .size(42.dp)
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Menu,
-                                                    contentDescription = "القائمة الجانبية",
-                                                    tint = com.whatsup.automation.presentation.theme.WhatsAppGreen,
-                                                    modifier = Modifier.size(22.dp)
-                                                )
+                                                IconButton(
+                                                    onClick = { scope.launch { drawerState.open() } },
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Menu,
+                                                        contentDescription = "القائمة الجانبية",
+                                                        tint = com.whatsup.automation.presentation.theme.WhatsAppGreenLight,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -367,11 +382,13 @@ class MainActivity : ComponentActivity() {
                     // درع قفل التطبيق بالـ PIN والبصمة
                     AppLockOverlay(appLockManager = appLockManager)
 
-                    // درع تفعيل الاشتراك والترخيص المقاوم للكراك
-                    if (licenseState is com.whatsup.automation.data.security.LicenseState.NotActivated ||
+                    // درع تفعيل الاشتراك والترخيص المقاوم للكراك (خارج شاشة البداية والدخول)
+                    val isSplashAuthActive = currentRoute == Screen.SplashAuth.route
+                    if (!isSplashAuthActive && (
+                        licenseState is com.whatsup.automation.data.security.LicenseState.NotActivated ||
                         licenseState is com.whatsup.automation.data.security.LicenseState.Expired ||
                         licenseState is com.whatsup.automation.data.security.LicenseState.Blocked
-                    ) {
+                    )) {
                         com.whatsup.automation.presentation.screens.activation.ActivationScreen(
                             viewModel = activationViewModel
                         )

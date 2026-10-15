@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,7 +39,10 @@ import com.whatsup.automation.presentation.components.BentoCard
 import com.whatsup.automation.presentation.components.BentoSkeletonList
 import com.whatsup.automation.presentation.components.PulseReactor
 import com.whatsup.automation.presentation.components.StoryAvatarRing
+import com.whatsup.automation.presentation.screens.statuses.components.StatusPreviewDialog
+import com.whatsup.automation.presentation.screens.statuses.components.StatusStoryCard
 import com.whatsup.automation.presentation.theme.*
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -49,12 +53,18 @@ fun StatusesScreen(
     viewModel: StatusesViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val uiState by viewModel.uiState.collectAsState()
     val availableEmojis = listOf("💚", "❤️", "⭐", "🔥", "🫀", "😂", "👍", "👏", "🎉", "🤲", "💯", "😍", "🥳")
     var showCustomEmojiDialog by remember { mutableStateOf(false) }
     var customEmojiInput by remember { mutableStateOf("") }
+    var selectedStatusForPreview by remember { mutableStateOf<StatusStory?>(null) }
     val haptic = LocalHapticFeedback.current
     val pullToRefreshState = rememberPullToRefreshState()
+
+
 
     // نافذة إدخال إيموجي مخصص
     if (showCustomEmojiDialog) {
@@ -183,43 +193,49 @@ fun StatusesScreen(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         // زر وضع التحديد المتعدد
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.setMultiSelectMode(!uiState.isMultiSelectMode)
-                            },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (uiState.isMultiSelectMode) CyberCyan.copy(alpha = 0.2f) else Color(0x15FFFFFF))
-                                .border(1.dp, if (uiState.isMultiSelectMode) CyberCyan else Color(0x25FFFFFF), CircleShape)
+                        com.whatsup.automation.presentation.components.AppTooltipBox(
+                            tooltipText = if (uiState.isMultiSelectMode) "إلغاء وضع التحديد المتعدد" else "تفعيل وضع التحديد المتعدد للحالات"
                         ) {
-                            Icon(
-                                imageVector = if (uiState.isMultiSelectMode) Icons.Filled.Checklist else Icons.Outlined.Checklist,
-                                contentDescription = "تحديد متعدد",
-                                tint = if (uiState.isMultiSelectMode) CyberCyan else TextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.setMultiSelectMode(!uiState.isMultiSelectMode)
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(if (uiState.isMultiSelectMode) CyberCyan.copy(alpha = 0.2f) else Color(0x15FFFFFF))
+                                    .border(1.dp, if (uiState.isMultiSelectMode) CyberCyan else Color(0x25FFFFFF), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = if (uiState.isMultiSelectMode) Icons.Filled.Checklist else Icons.Outlined.Checklist,
+                                    contentDescription = "تحديد متعدد",
+                                    tint = if (uiState.isMultiSelectMode) CyberCyan else TextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
 
                         // زر جلب الحالات الفوري
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.fetchLatestStatuses()
-                            },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(WhatsAppGreen.copy(alpha = 0.15f))
-                                .border(1.dp, WhatsAppGreen.copy(alpha = 0.35f), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Sync,
-                                contentDescription = "جلب الحالات",
-                                tint = WhatsAppGreen,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        com.whatsup.automation.presentation.components.AppTooltipBox(tooltipText = "تحديث وجلب أحدث الحالات من واتساب الآن") {
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.fetchLatestStatuses()
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(WhatsAppGreen.copy(alpha = 0.15f))
+                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.35f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Sync,
+                                    contentDescription = "جلب الحالات",
+                                    tint = WhatsAppGreen,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -356,6 +372,7 @@ fun StatusesScreen(
                             isSelected = uiState.selectedSubTab == StatusSubTab.NEW,
                             accentColor = WhatsAppGreen,
                             modifier = Modifier.width(90.dp),
+                            tooltipText = "الحالات الجديدة غير المشاهدة (${uiState.newCount})",
                             onClick = { viewModel.selectSubTab(StatusSubTab.NEW) }
                         )
                     }
@@ -367,6 +384,7 @@ fun StatusesScreen(
                             isSelected = uiState.selectedSubTab == StatusSubTab.VIEWED,
                             accentColor = CyberCyan,
                             modifier = Modifier.width(90.dp),
+                            tooltipText = "الحالات التي تمت مشاهدتها والتفاعل معها (${uiState.viewedCount})",
                             onClick = { viewModel.selectSubTab(StatusSubTab.VIEWED) }
                         )
                     }
@@ -378,6 +396,7 @@ fun StatusesScreen(
                             isSelected = uiState.selectedSubTab == StatusSubTab.DELETED_TEMP,
                             accentColor = Color(0xFFE11D48),
                             modifier = Modifier.width(110.dp),
+                            tooltipText = "الحالات المحفوظة قبل حذفها من قِبل أصحابها (${uiState.deletedTempCount})",
                             onClick = { viewModel.selectSubTab(StatusSubTab.DELETED_TEMP) }
                         )
                     }
@@ -389,6 +408,7 @@ fun StatusesScreen(
                             isSelected = uiState.selectedSubTab == StatusSubTab.MUTED,
                             accentColor = RoseError,
                             modifier = Modifier.width(105.dp),
+                            tooltipText = "جهات الاتصال المستثناة من المشاهدة التلقائية (${uiState.mutedCount})",
                             onClick = { viewModel.selectSubTab(StatusSubTab.MUTED) }
                         )
                     }
@@ -400,6 +420,7 @@ fun StatusesScreen(
                             isSelected = uiState.selectedSubTab == StatusSubTab.FAVORITES,
                             accentColor = AmberWarning,
                             modifier = Modifier.width(95.dp),
+                            tooltipText = "الحالات وجهات الاتصال المميزة بنجمة (${uiState.favoritesCount})",
                             onClick = { viewModel.selectSubTab(StatusSubTab.FAVORITES) }
                         )
                     }
@@ -501,11 +522,48 @@ fun StatusesScreen(
                         onReactClick = { emoji ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.viewAndReact(story.id, emoji)
+                        },
+                        onDownloadClick = {
+                            viewModel.downloadStatus(context, story) { _, msg ->
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(msg)
+                                }
+                            }
+                        },
+                        onCardClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedStatusForPreview = story
                         }
                     )
                 }
             }
         }
+
+        // 6. نافذة معاينة الحالة المنبثقة الواقعية بمنتصف الشاشة مع زر (X) للإغلاق
+        selectedStatusForPreview?.let { previewStory ->
+            StatusPreviewDialog(
+                story = previewStory,
+                onDismiss = { selectedStatusForPreview = null },
+                onDownloadOrCopy = {
+                    viewModel.downloadStatus(context, previewStory) { _, msg ->
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(msg)
+                        }
+                    }
+                },
+                onReactClick = { emoji ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.viewAndReact(previewStory.id, emoji)
+                }
+            )
+        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        )
     }
 }
 
@@ -519,37 +577,40 @@ private fun StatusTabButton(
     isSelected: Boolean,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    tooltipText: String = "",
     onClick: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) accentColor.copy(alpha = 0.18f) else DarkSurface.copy(alpha = 0.5f))
-            .border(1.dp, if (isSelected) accentColor else Color(0x18FFFFFF), RoundedCornerShape(12.dp))
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            }
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+    com.whatsup.automation.presentation.components.AppTooltipBox(tooltipText = tooltipText) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isSelected) accentColor.copy(alpha = 0.18f) else DarkSurface.copy(alpha = 0.5f))
+                .border(1.dp, if (isSelected) accentColor else Color(0x18FFFFFF), RoundedCornerShape(12.dp))
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                }
+                .padding(vertical = 10.dp, horizontal = 4.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = title,
-                fontSize = 11.5.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) accentColor else TextSecondary
-            )
-            Text(
-                text = "$count",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected) TextPrimary else TextMuted
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 11.5.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) accentColor else TextSecondary
+                )
+                Text(
+                    text = "$count",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) TextPrimary else TextMuted
+                )
+            }
         }
     }
 }
@@ -580,233 +641,7 @@ private fun StatusSortChip(
     }
 }
 
-/**
- * بطاقة الحالة الفاخرة مع القلب الأخضر التفاعلي وزر الاستثناء والمفضلة.
- */
-@Composable
-private fun StatusStoryCard(
-    story: StatusStory,
-    isFavorite: Boolean,
-    isMuted: Boolean,
-    isMultiSelectMode: Boolean,
-    isSelected: Boolean,
-    onToggleFavorite: () -> Unit,
-    onToggleMuted: () -> Unit,
-    onSelectToggle: () -> Unit,
-    onReactClick: (String) -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-    val timeFormatter = remember {
-        DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault()).withZone(ZoneId.systemDefault())
-    }
 
-    val borderBrush = when {
-        isMuted -> Brush.linearGradient(listOf(RoseError.copy(alpha = 0.4f), Color(0x10FFFFFF)))
-        isFavorite -> ObsidianGlowBorder.Amber
-        story.isReacted -> ObsidianGlowBorder.Emerald
-        else -> ObsidianGlowBorder.None
-    }
-
-    // حركة نبض القلب الأخضر التفاعلي
-    val heartScale by animateFloatAsState(
-        targetValue = if (story.isReacted) 1.15f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "heartScale"
-    )
-
-    BentoCard(
-        modifier = Modifier.fillMaxWidth(),
-        borderBrush = borderBrush,
-        onClick = if (isMultiSelectMode) onSelectToggle else null
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // سطر الرأس (صورة الشخص + الاسم + المفضلة + زر الاستثناء)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    // اختيار متعدد
-                    if (isMultiSelectMode) {
-                        Checkbox(
-                            checked = isSelected,
-                            onCheckedChange = { onSelectToggle() },
-                            colors = CheckboxDefaults.colors(checkedColor = CyberCyan)
-                        )
-                    }
-
-                    // دائرة القصة
-                    StoryAvatarRing(
-                        initials = story.senderName.ifBlank { story.senderPhone }.take(2),
-                        isViewed = story.isViewed || story.isReacted,
-                        size = 46.dp
-                    )
-
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = story.senderName,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isMuted) TextMuted else TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (isFavorite) {
-                                Text("⭐", fontSize = 12.sp)
-                            }
-                            if (isMuted) {
-                                Text("🚫", fontSize = 11.sp)
-                            }
-                        }
-
-                        Text(
-                            text = "${story.senderPhone} • ${timeFormatter.format(story.timestamp)}",
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
-                    }
-                }
-
-                // أزرار التحكم السريع (نجمة المفضلة + زر الاستثناء السريع)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // زر المفضلة
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onToggleFavorite()
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                            contentDescription = "المفضلة",
-                            tint = if (isFavorite) AmberWarning else TextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // زر الاستثناء / التعطيل السريع (مشاهدة أحمد واستثناء سعيد)
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleMuted()
-                        },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(if (isMuted) RoseError.copy(alpha = 0.2f) else Color(0x10FFFFFF))
-                    ) {
-                        Icon(
-                            imageVector = if (isMuted) Icons.Filled.VolumeOff else Icons.Outlined.VolumeUp,
-                            contentDescription = if (isMuted) "إلغاء الاستثناء" else "استثناء من المشاهدة",
-                            tint = if (isMuted) RoseError else TextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // محتوى الحالة (نص، صورة، فيديو)
-            if (!story.textContent.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0x15FFFFFF))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = story.textContent,
-                        fontSize = 12.5.sp,
-                        color = TextPrimary,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // سطر الحالة والتفاعل مع القلب الأخضر التفاعلي المضيء 💚
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // نوع وسائط الحالة ووقت المشاهدة
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val mediaIcon = when (story.mediaType) {
-                        StatusMediaType.IMAGE -> Icons.Filled.Image
-                        StatusMediaType.VIDEO -> Icons.Filled.Videocam
-                        StatusMediaType.TEXT -> Icons.Filled.TextFields
-                    }
-                    val mediaLabel = when (story.mediaType) {
-                        StatusMediaType.IMAGE -> "صورة"
-                        StatusMediaType.VIDEO -> "فيديو"
-                        StatusMediaType.TEXT -> "نص"
-                    }
-
-                    Icon(mediaIcon, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
-                    Text(mediaLabel, fontSize = 11.sp, color = TextMuted)
-
-                    if (story.isViewed) {
-                        Text("•", fontSize = 11.sp, color = TextMuted)
-                        Text("تمت المشاهدة ✓", fontSize = 11.sp, color = CyberCyan)
-                    }
-                }
-
-                // 💚 القلب الأخضر التفاعلي الواقعي
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (story.isReacted) {
-                        Text(
-                            text = "تم التفاعل 💚",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WhatsAppGreen
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .scale(heartScale)
-                            .clip(CircleShape)
-                            .background(
-                                if (story.isReacted) WhatsAppGreen.copy(alpha = 0.22f) else Color(0x10FFFFFF)
-                            )
-                            .border(
-                                width = if (story.isReacted) 1.5.dp else 1.dp,
-                                color = if (story.isReacted) WhatsAppGreen else Color(0x25FFFFFF),
-                                shape = CircleShape
-                            )
-                            .clickable {
-                                onReactClick("💚")
-                            }
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = story.reactionEmoji?.ifBlank { "💚" } ?: "💚",
-                            fontSize = if (story.isReacted) 18.sp else 16.sp
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
  * بيانات بطاقة الحالة الفارغة.

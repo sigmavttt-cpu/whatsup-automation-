@@ -44,6 +44,7 @@ fun DashboardScreen(
     onNavigateToPairing: () -> Unit = {},
     onNavigateToRules: () -> Unit = {},
     onNavigateToLogs: () -> Unit = {},
+    onOpenDrawer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,27 +86,52 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
                             .weight(1f, fill = false)
-                            .padding(end = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                            .padding(end = 8.dp)
                     ) {
-                        Text(
-                            text = "Sigma AutoFlow",
-                            fontSize = 25.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "محرك أتمتة واتساب الفائق ⚡",
-                            fontSize = 12.sp,
-                            color = TextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        // زر القائمة الجانبية الفاخر المدمج في الهيدر
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onOpenDrawer()
+                            },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xD90F1A22))
+                                .border(1.2.dp, Color(0x6600E676), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "القائمة الجانبية",
+                                tint = WhatsAppGreenLight,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "Sigma AutoFlow",
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "محرك أتمتة واتساب الفائق ⚡",
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     Row(

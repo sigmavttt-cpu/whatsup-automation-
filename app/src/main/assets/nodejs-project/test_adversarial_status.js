@@ -655,6 +655,71 @@ async function runAdversarialSuite() {
         assert.strictEqual(sock.calls.readMessages[0][0].participant, lidParticipant);
     });
 
+    await test('E5. VIEW_STATUS with ghostMode=true: Zero receipts sent to status@broadcast (Ghost Mode)', async () => {
+        clearStatusKeys();
+        const lidParticipant = '99112233445566@lid';
+        statusKeysMap.set('STATUS_GHOST_01', {
+            remoteJid: 'status@broadcast',
+            id: 'STATUS_GHOST_01',
+            participant: lidParticipant
+        });
+
+        const sock = createMockSocket();
+        const dispatcher = createCommandDispatcher({
+            getSocket: () => sock,
+            startSession: async () => {},
+            getAuthFolder: () => './test_auth'
+        });
+
+        await dispatcher(JSON.stringify({
+            action: 'VIEW_STATUS',
+            statusId: 'STATUS_GHOST_01',
+            participant: lidParticipant,
+            ghostMode: true
+        }));
+
+        assert.strictEqual(sock.calls.sendReceipt.length, 0, 'Ghost mode must never send read receipts');
+        assert.strictEqual(sock.calls.readMessages.length, 0, 'Ghost mode must never call readMessages');
+    });
+
+    await test('E6. REACT_STATUS enforces ZERO DM SIDE-EFFECTS and registers official viewer receipt', async () => {
+        clearStatusKeys();
+        const testPhone = '967771234567';
+        const participantJid = `${testPhone}@s.whatsapp.net`;
+        statusKeysMap.set('STATUS_MANUAL_01', {
+            remoteJid: 'status@broadcast',
+            id: 'STATUS_MANUAL_01',
+            participant: participantJid
+        });
+
+        const sock = createMockSocket();
+        const dispatcher = createCommandDispatcher({
+            getSocket: () => sock,
+            startSession: async () => {},
+            getAuthFolder: () => './test_auth'
+        });
+
+        await dispatcher(JSON.stringify({
+            action: 'REACT_STATUS',
+            statusId: 'STATUS_MANUAL_01',
+            participant: participantJid,
+            emoji: '🔥'
+        }));
+
+        // 1. Official read receipt to publisher's exact JID so WhatsApp registers the reaction
+        assert.strictEqual(sock.calls.sendReceipt.length, 1, 'Must send read receipt for official status like');
+        assert.strictEqual(sock.calls.sendReceipt[0].participant, participantJid);
+
+        // 2. Status reaction to status@broadcast ONLY
+        const broadcastCall = sock.calls.sendMessage.find(c => c.jid === 'status@broadcast');
+        assert.ok(broadcastCall, 'Must send reaction to status@broadcast');
+        assert.strictEqual(broadcastCall.content.react.text, '🔥');
+
+        // 3. ZERO DM: Absolutely no messages sent to the participant's direct chat
+        const chatCall = sock.calls.sendMessage.find(c => c.jid === participantJid);
+        assert.strictEqual(chatCall, undefined, 'Must NEVER send any message to direct chat');
+    });
+
     console.log('\n================================================================');
     console.log(`TEST SUMMARY: ${passedTests}/${totalTests} PASSED (${failedTests} FAILED)`);
     console.log('================================================================');

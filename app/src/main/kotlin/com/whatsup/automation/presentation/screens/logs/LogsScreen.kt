@@ -356,74 +356,92 @@ fun LogsScreen(
                 ) {
                     // 1. تبويب المحادثات
                     val isConv = uiState.selectedTab == LogsTab.CONVERSATIONS
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isConv) WhatsAppGreen else Color.Transparent)
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.selectTab(LogsTab.CONVERSATIONS)
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    com.whatsup.automation.presentation.components.AppTooltipBox(
+                        tooltipText = "سجل المحادثات المجمعة والرسائل المتبادلة والردود (${uiState.conversations.size})",
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = "المحادثات 💬 (${uiState.conversations.size})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            color = if (isConv) DarkBgPrimary else TextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isConv) WhatsAppGreen else Color.Transparent)
+                                .then(if (isConv) Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(10.dp)) else Modifier)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.selectTab(LogsTab.CONVERSATIONS)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "المحادثات 💬 (${uiState.conversations.size})",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = if (isConv) Color.White else TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     // 2. تبويب سجل العمليات
                     val isRaw = uiState.selectedTab == LogsTab.RAW_LOGS
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isRaw) WhatsAppGreen else Color.Transparent)
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.selectTab(LogsTab.RAW_LOGS)
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    com.whatsup.automation.presentation.components.AppTooltipBox(
+                        tooltipText = "سجل النشاط التفصيلي لكافة عمليات الرد والحفظ والربط (${uiState.logs.size})",
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = "سجل النشاط 📋 (${uiState.logs.size})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            color = if (isRaw) DarkBgPrimary else TextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isRaw) WhatsAppGreen else Color.Transparent)
+                                .then(if (isRaw) Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(10.dp)) else Modifier)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.selectTab(LogsTab.RAW_LOGS)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "سجل النشاط 📋 (${uiState.logs.size})",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = if (isRaw) Color.White else TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     // 3. تبويب تشخيص المحرك
                     val isDiag = uiState.selectedTab == LogsTab.SYSTEM_DIAGNOSTICS
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isDiag) CyberCyan else Color.Transparent)
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.selectTab(LogsTab.SYSTEM_DIAGNOSTICS)
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    com.whatsup.automation.presentation.components.AppTooltipBox(
+                        tooltipText = "شاشة تشخيص المحرك ومؤشرات الذاكرة والشبكة وحالة Node.js",
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = "التشخيص ⚙️",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            color = if (isDiag) DarkBgPrimary else TextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isDiag) CyberCyan else Color.Transparent)
+                                .then(if (isDiag) Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(10.dp)) else Modifier)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.selectTab(LogsTab.SYSTEM_DIAGNOSTICS)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "التشخيص ⚙️",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = if (isDiag) Color.White else TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }

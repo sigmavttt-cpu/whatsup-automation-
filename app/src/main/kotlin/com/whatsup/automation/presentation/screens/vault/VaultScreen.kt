@@ -103,13 +103,13 @@ fun VaultScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "الخزينة السرية 🔒",
+                            text = "المسترجعات والرسائل المحذوفة 🗑️",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                         Text(
-                            text = "وسائط العرض لمرة واحدة، الرسائل المحذوفة، والحالات الملتقطة محلياً",
+                            text = "استعراض ما حذفه الطرف الآخر ووسائط العرض لمرة واحدة المحفوظة بالنظام",
                             fontSize = 11.sp,
                             color = TextSecondary,
                             maxLines = 1,
@@ -125,7 +125,7 @@ fun VaultScreen(
                 onValueChange = { viewModel.setSearchQuery(it) },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("بحث بالاسم، الرقم، أو محتوى الرسالة...", fontSize = 12.sp, color = TextMuted) },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = WhatsAppGreen) },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = WhatsAppGreenLight) },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.setSearchQuery("") }) {
@@ -136,10 +136,10 @@ fun VaultScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = WhatsAppGreen,
-                    unfocusedBorderColor = Color(0x3300A884),
-                    focusedContainerColor = Color(0xFFFFFFFF),
-                    unfocusedContainerColor = Color(0xFFFFFFFF),
+                    focusedBorderColor = WhatsAppGreenLight,
+                    unfocusedBorderColor = Color(0x3300E676),
+                    focusedContainerColor = Color(0xFF0F1A22),
+                    unfocusedContainerColor = Color(0xFF0F1A22),
                     focusedTextColor = TextPrimary,
                     unfocusedTextColor = TextPrimary
                 )
@@ -152,23 +152,11 @@ fun VaultScreen(
             ) {
                 item {
                     VaultFilterChip(
-                        title = "العرض لمرة واحدة (${uiState.viewOnceCount})",
-                        icon = Icons.Filled.Visibility,
-                        isSelected = uiState.activeTab == VaultSubTab.VIEW_ONCE,
-                        activeColor = NeonPurple,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            viewModel.setActiveTab(VaultSubTab.VIEW_ONCE)
-                        }
-                    )
-                }
-
-                item {
-                    VaultFilterChip(
-                        title = "الرسائل المحذوفة (${uiState.deletedCount})",
+                        title = "الرسائل المحذوفة (${uiState.deletedCount}) 🗑️",
                         icon = Icons.Filled.DeleteSweep,
                         isSelected = uiState.activeTab == VaultSubTab.ANTI_DELETE,
                         activeColor = AmberWarning,
+                        tooltipText = "سجل الرسائل التي تم حذفها من الطرف الآخر واحتفظ بها التطبيق (${uiState.deletedCount})",
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             viewModel.setActiveTab(VaultSubTab.ANTI_DELETE)
@@ -178,10 +166,25 @@ fun VaultScreen(
 
                 item {
                     VaultFilterChip(
+                        title = "العرض لمرة واحدة (${uiState.viewOnceCount}) 👁️",
+                        icon = Icons.Filled.Visibility,
+                        isSelected = uiState.activeTab == VaultSubTab.VIEW_ONCE,
+                        activeColor = NeonPurple,
+                        tooltipText = "الصور والفيديوهات المرسلة بخاصية العرض لمرة واحدة المحفوظة بأمان (${uiState.viewOnceCount})",
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setActiveTab(VaultSubTab.VIEW_ONCE)
+                        }
+                    )
+                }
+
+                item {
+                    VaultFilterChip(
                         title = "المفضلة ⭐",
                         icon = Icons.Filled.Star,
                         isSelected = uiState.activeTab == VaultSubTab.FAVORITES,
-                        activeColor = WhatsAppGreen,
+                        activeColor = WhatsAppGreenLight,
+                        tooltipText = "العناصر والوسائط المميزة بنجمة للوصول السريع",
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             viewModel.setActiveTab(VaultSubTab.FAVORITES)
@@ -265,36 +268,39 @@ private fun VaultFilterChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isSelected: Boolean,
     activeColor: Color,
+    tooltipText: String = "",
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) activeColor.copy(alpha = 0.15f) else Color(0xFFFFFFFF))
-            .border(
-                1.dp,
-                if (isSelected) activeColor else Color(0x3300A884),
-                RoundedCornerShape(12.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+    com.whatsup.automation.presentation.components.AppTooltipBox(tooltipText = tooltipText) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isSelected) activeColor.copy(alpha = 0.2f) else Color(0xCC0F1A22))
+                .border(
+                    1.dp,
+                    if (isSelected) activeColor else Color(0x3300E676),
+                    RoundedCornerShape(12.dp)
+                )
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) activeColor else TextSecondary,
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) activeColor else TextPrimary
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isSelected) activeColor else TextSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = title,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) activeColor else TextPrimary
+                )
+            }
         }
     }
 }
@@ -501,8 +507,8 @@ private fun VaultItemPreviewDialog(
                     .fillMaxWidth()
                     .heightIn(max = 680.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFFFFFFFF))
-                    .border(1.dp, Color(0x3300A884), RoundedCornerShape(20.dp))
+                    .background(Color(0xFF0F1A22))
+                    .border(1.dp, Color(0x3300E676), RoundedCornerShape(20.dp))
                     .verticalScroll(rememberScrollState())
                     .padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

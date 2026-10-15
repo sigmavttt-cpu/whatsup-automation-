@@ -116,7 +116,7 @@ interface StatusDao {
     @Query("UPDATE statuses SET isReacted = 1, reactionEmoji = :emoji WHERE id = :statusId")
     suspend fun reactToStatus(statusId: String, emoji: String)
 
-    @Query("DELETE FROM statuses WHERE timestamp < :olderThanTimestamp")
+    @Query("DELETE FROM statuses WHERE timestamp < :olderThanTimestamp AND isDeleted = 0")
     suspend fun deleteExpiredStatuses(olderThanTimestamp: Long)
 
     @Query("UPDATE statuses SET isFavorite = :isFavorite WHERE id = :statusId")
