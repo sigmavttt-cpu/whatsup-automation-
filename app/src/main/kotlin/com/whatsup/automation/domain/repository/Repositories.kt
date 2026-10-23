@@ -26,6 +26,7 @@ interface LogRepository {
     suspend fun clearAllLogs()
     suspend fun getStats(): DashboardStats
     suspend fun pruneOldLogs(keepCount: Int = 1000): Int
+    suspend fun getRecentLogsForPhone(phone: String, limit: Int = 10): List<ActivityLog>
 }
 
 /**
@@ -54,6 +55,11 @@ interface StatusRepository {
     suspend fun muteMultipleSenders(senderPhones: List<String>, isMuted: Boolean)
     suspend fun markStatusAsDeleted(statusId: String)
     suspend fun deleteExpiredDeletedStatuses()
+    suspend fun deleteStatuses(statusIds: List<String>)
+    suspend fun deleteStatus(statusId: String)
+    suspend fun markStatusSaved(statusId: String, savedFilePath: String?, isSaved: Boolean = true)
+    suspend fun updateMediaUrl(statusId: String, mediaUrl: String)
+    fun getSavedStatuses(): Flow<List<StatusStory>>
 }
 
 /**

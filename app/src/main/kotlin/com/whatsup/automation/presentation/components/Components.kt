@@ -20,9 +20,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -98,7 +100,7 @@ fun GlassmorphicCard(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
-            .background(Color(0xFFFFFFFF))
+            .background(DarkSurface)
             .border(1.5.dp, borderBrush, RoundedCornerShape(cornerRadius))
             .padding(18.dp)
     ) {
@@ -256,7 +258,7 @@ fun LuxuryOutlinedButton(
         modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFFFFFFFF))
+            .background(DarkSurface)
             .border(1.5.dp, borderBrush, RoundedCornerShape(16.dp))
             .clickable(
                 enabled = enabled,
@@ -331,7 +333,7 @@ fun <T> SegmentedPillSelector(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFFFFFFFF),
+        color = DarkSurface,
         border = BorderStroke(1.dp, Color(0x3300A884))
     ) {
         Row(
@@ -389,6 +391,7 @@ fun PulseReactor(
     inactiveColor: Color = AmberWarning,
     modifier: Modifier = Modifier
 ) {
+    val currentColor = if (isActive) activeColor else inactiveColor
     val infiniteTransition = rememberInfiniteTransition(label = "reactorPulse")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -413,20 +416,24 @@ fun PulseReactor(
         modifier = modifier.size(16.dp),
         contentAlignment = Alignment.Center
     ) {
-        // هالة متوهجة خارجية
+        // هالة متوهجة خارجية — تُنفّذ في مرحلة الرسم عبر graphicsLayer لمنع إعادة تركيب الكومبوز واستهلاك المعالج
         Box(
             modifier = Modifier
                 .size(14.dp)
-                .scale(scale)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha * 0.4f
+                }
                 .clip(CircleShape)
-                .background((if (isActive) activeColor else inactiveColor).copy(alpha = alpha * 0.4f))
+                .background(currentColor)
         )
         // قلب المفاعل الداخلي
         Box(
             modifier = Modifier
                 .size(8.dp)
                 .clip(CircleShape)
-                .background(if (isActive) activeColor else inactiveColor)
+                .background(currentColor)
         )
     }
 }
@@ -670,13 +677,15 @@ fun ServiceHealthCard(
                         ),
                         label = "alpha"
                     )
+                    val statusColor = if (snapshot.isForegroundServiceRunning) WhatsAppGreen else RoseError
                     Box(
                         modifier = Modifier
                             .size(10.dp)
+                            .graphicsLayer {
+                                this.alpha = alpha
+                            }
                             .clip(CircleShape)
-                            .background(
-                                (if (snapshot.isForegroundServiceRunning) WhatsAppGreen else RoseError).copy(alpha = alpha)
-                            )
+                            .background(statusColor)
                     )
                     Text(
                         text = "حارس الخدمة ومراقبة الأداء",
@@ -815,4 +824,148 @@ fun AppTooltipBox(
     }
 }
 
+/**
+ * شريط الرأس القياسي الموحد لجميع شاشات التطبيق (Unified App Screen Header).
+ * يوفر تصميماً أندرويد حقيقياً ونظيفاً: زر القائمة الجانبية (≡) + العنوان والوصف + أزرار الإجراءات والشارات.
+ */
+@Composable
+fun AppScreenHeader(
+    title: String,
+    subtitle: String? = null,
+    onOpenDrawer: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    actions: @Composable (RowScope.() -> Unit)? = null
+) {
+    val haptic = LocalHapticFeedback.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            if (onOpenDrawer != null) {
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onOpenDrawer()
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xD90F1A22))
+                        .border(1.2.dp, Color(0x6600E676), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "القائمة الجانبية",
+                        tint = WhatsAppGreenLight,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
 
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 11.5.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        if (actions != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                content = actions
+            )
+        }
+    }
+}
+
+/**
+ * مكوّن الحالة الفارغة الموحد عالي الجودة لكافة شاشات التطبيق (Unified Actionable Empty State).
+ * يستبدل النصوص البدائية بأيقونة متجهة وشرح واضح وزر استعادة/إجراء فوري بنقرة واحدة.
+ */
+@Composable
+fun AppEmptyState(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    actionLabel: String? = null,
+    onActionClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp, horizontal = 20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x1A00E676))
+                    .border(1.dp, Color(0x3300E676), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = WhatsAppGreenLight,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Text(
+                text = subtitle,
+                fontSize = 12.5.sp,
+                color = TextSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            if (!actionLabel.isNullOrBlank() && onActionClick != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                LiquidGradientButton(
+                    text = actionLabel,
+                    onClick = onActionClick,
+                    modifier = Modifier.height(42.dp)
+                )
+            }
+        }
+    }
+}

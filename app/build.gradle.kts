@@ -14,8 +14,8 @@ android {
         applicationId = "com.sigmacodex.whatsup"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "8.3.0"
+        versionCode = 17
+        versionName = "8.3.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -50,7 +50,7 @@ android {
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
-                enableV4Signing = false
+                enableV4Signing = true
             }
         }
     }

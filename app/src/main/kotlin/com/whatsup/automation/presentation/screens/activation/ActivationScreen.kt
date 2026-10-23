@@ -1,7 +1,10 @@
 package com.whatsup.automation.presentation.screens.activation
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -32,11 +34,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.whatsup.automation.data.security.LicenseState
+import com.whatsup.automation.presentation.screens.activation.components.DeviceFingerprintCard
+import com.whatsup.automation.presentation.screens.activation.components.LicenseStatusBadge
 import com.whatsup.automation.presentation.theme.*
 
 /**
  * شاشة قفل وتفعيل الاشتراكات الفاخرة (Activation & Subscription Screen).
- * مصممة بنمط White Emerald Luxury الملكي مع دعم كامل لاتجاه RTL.
+ * مصممة بنمط Cyber Jade Dark Glassmorphism مع دعم كامل لاتجاه RTL.
  */
 @Composable
 fun ActivationScreen(
@@ -60,15 +64,7 @@ fun ActivationScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFF8FAFC),
-                        Color(0xFFEDF4EE),
-                        Color(0xFFF1F5F9)
-                    )
-                )
-            )
+            .background(DarkBgPrimary)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(20.dp),
@@ -81,23 +77,19 @@ fun ActivationScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // بطاقة الشعار والرمز التفاعلي
+            // أيقونة القفل والشعار
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(88.dp)
                     .clip(CircleShape)
                     .background(
-                        Brush.radialGradient(
-                            colors = if (isExpired || isBlocked) {
-                                listOf(Color(0xFFFFEBEE), Color(0xFFFFCDD2))
-                            } else {
-                                listOf(Color(0xFFE8F5E9), Color(0xFFC8E6C9))
-                            }
-                        )
+                        if (isExpired || isBlocked) RoseError.copy(alpha = 0.15f)
+                        else WhatsAppGreen.copy(alpha = 0.15f)
                     )
                     .border(
                         2.dp,
-                        if (isExpired || isBlocked) Color(0xFFEF5350) else WhatsAppGreen.copy(alpha = 0.5f),
+                        if (isExpired || isBlocked) RoseError.copy(alpha = 0.5f)
+                        else WhatsAppGreen.copy(alpha = 0.5f),
                         CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -109,122 +101,119 @@ fun ActivationScreen(
                         else -> Icons.Default.Key
                     },
                     contentDescription = null,
-                    tint = if (isExpired || isBlocked) Color(0xFFD32F2F) else WhatsAppGreen,
-                    modifier = Modifier.size(48.dp)
+                    tint = if (isExpired || isBlocked) RoseError else WhatsAppGreen,
+                    modifier = Modifier.size(44.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // شارة الحالة (Status Badge)
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = when {
-                    isExpired -> Color(0xFFFFEBEE)
-                    isBlocked -> Color(0xFFFFEBEE)
-                    else -> Color(0xFFE8F5E9)
-                },
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (isExpired || isBlocked) Color(0xFFFFCDD2) else Color(0xFFA5D6A7)
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isExpired || isBlocked) Icons.Default.Warning else Icons.Default.VerifiedUser,
-                        contentDescription = null,
-                        tint = if (isExpired || isBlocked) Color(0xFFC62828) else WhatsAppGreen,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when {
-                            isExpired -> "انتهت فترة الاشتراك"
-                            isBlocked -> "تم إيقاف الاشتراك"
-                            else -> "تفعيل الاشتراك مطلوب"
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isExpired || isBlocked) Color(0xFFC62828) else Color(0xFF2E7D32)
-                    )
-                }
-            }
+            LicenseStatusBadge(licenseState = licenseState)
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // العنوان الرئيسي
             Text(
                 text = "WhatsUp Automation",
-                fontSize = 24.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = TextPrimary,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // الوصف التوضيحي
             Text(
                 text = when {
                     isExpired -> "لقد انتهت فترة اشتراكك الحالية. يسعدنا استمرارك معنا وتجديد اشتراكك عبر التواصل مع الإدارة."
                     isBlocked -> "تم تعليق هذا الترخيص من قبل الإدارة. يُرجى مراجعة الدعم الفني لحل الأمر."
-                    else -> "مرحباً بك! يرجى إدخال كود التفعيل الذي استلمته من الإدارة للبدء باستخدام محرك الأتمتة والردود التلقائية."
+                    else -> "مرحباً بك! يرجى إدخال كود التفعيل الذي استلمته من الإدارة للبدء باستخدام محرك الأتمتة."
                 },
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 color = TextSecondary,
                 textAlign = TextAlign.Center,
-                lineHeight = 22.sp,
+                lineHeight = 20.sp,
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // بطاقة الإدخال الفاخرة (Bento Card)
+            // بطاقة الإدخال
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = Color.White,
-                shadowElevation = 4.dp,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                shape = RoundedCornerShape(20.dp),
+                color = DarkSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorderSubtle)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "كود التفعيل (License Key)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextSecondary,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Start
-                    )
+                    DeviceFingerprintCard(fingerprint = viewModel.deviceFingerprint)
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "رمز الترخيص المشفر (الهاش):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        TextButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+                                if (!text.isNullOrBlank()) {
+                                    viewModel.onKeyChange(text)
+                                    Toast.makeText(context, "تم لصق الهاش من الحافظة", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "الحافظة فارغة", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = null,
+                                tint = WhatsAppGreen,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "لصق من الحافظة",
+                                fontSize = 12.sp,
+                                color = WhatsAppGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     OutlinedTextField(
                         value = inputKey,
                         onValueChange = { viewModel.onKeyChange(it) },
                         modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 5,
+                        singleLine = false,
+                        textStyle = LocalTextStyle.current.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        ),
                         placeholder = {
                             Text(
-                                text = "WUP-XXXX-XXXX-XXXX",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 15.sp,
-                                textAlign = TextAlign.Center,
+                                text = "الصق هنا كود الهاش المشفر الخاص بالترخيص (SIGMA-...)...",
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Start,
                                 modifier = Modifier.fillMaxWidth()
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.VpnKey,
-                                contentDescription = null,
-                                tint = WhatsAppGreen
                             )
                         },
                         trailingIcon = {
@@ -233,21 +222,22 @@ fun ActivationScreen(
                                     Icon(
                                         imageVector = Icons.Default.Clear,
                                         contentDescription = "مسح",
-                                        tint = Color(0xFF94A3B8)
+                                        tint = TextMuted
                                     )
                                 }
                             }
                         },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = WhatsAppGreen,
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedContainerColor = Color(0xFFFAFAFA),
-                            unfocusedContainerColor = Color(0xFFFAFAFA)
+                            unfocusedBorderColor = GlassBorderSubtle,
+                            focusedContainerColor = DarkBgSecondary,
+                            unfocusedContainerColor = DarkBgSecondary,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
                         ),
                         keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Characters,
+                            capitalization = KeyboardCapitalization.None,
                             imeAction = ImeAction.Done
                         ),
                         keyboardActions = KeyboardActions(
@@ -258,53 +248,53 @@ fun ActivationScreen(
                         )
                     )
 
-                    // عرض رسالة الخطأ إن وجدت
                     AnimatedVisibility(
                         visible = errorMessage != null,
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
-                        errorMessage?.let { error ->
-                            Spacer(modifier = Modifier.height(10.dp))
+                        errorMessage?.let { msg ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFFFEBEE))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(top = 10.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(RoseError.copy(alpha = 0.12f))
+                                    .border(1.dp, RoseError.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ErrorOutline,
                                     contentDescription = null,
-                                    tint = Color(0xFFD32F2F),
+                                    tint = RoseError,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = error,
+                                    text = msg,
                                     fontSize = 12.sp,
-                                    color = Color(0xFFC62828),
-                                    fontWeight = FontWeight.Medium
+                                    color = RoseError,
+                                    lineHeight = 16.sp
                                 )
                             }
                         }
                     }
 
-                    // عرض رسالة النجاح إن وجدت
                     AnimatedVisibility(
                         visible = successMessage != null,
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
-                        successMessage?.let { success ->
-                            Spacer(modifier = Modifier.height(10.dp))
+                        successMessage?.let { msg ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFE8F5E9))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(top = 10.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(WhatsAppGreen.copy(alpha = 0.12f))
+                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -313,59 +303,60 @@ fun ActivationScreen(
                                     tint = WhatsAppGreen,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = success,
+                                    text = msg,
                                     fontSize = 12.sp,
-                                    color = Color(0xFF2E7D32),
-                                    fontWeight = FontWeight.Medium
+                                    color = WhatsAppGreenLight,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                    // زر تفعيل الاشتراك
                     Button(
                         onClick = {
                             focusManager.clearFocus()
                             viewModel.submitActivation()
                         },
+                        enabled = inputKey.isNotBlank() && !isSubmitting,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
-                        enabled = !isSubmitting && inputKey.isNotBlank(),
-                        shape = RoundedCornerShape(16.dp),
+                            .height(50.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = WhatsAppGreen,
-                            contentColor = Color.White
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                            disabledContainerColor = DarkBgSecondary
+                        )
                     ) {
                         if (isSubmitting) {
                             CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.5.dp
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = DarkBgPrimary
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "جارٍ التحقق والربط بالسحابة...",
+                                text = "جارٍ التحقق...",
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBgPrimary
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
+                                tint = DarkBgPrimary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "تفعيل الاشتراك الآن 🚀",
+                                text = "تفعيل الاشتراك الآن",
                                 fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBgPrimary
                             )
                         }
                     }
@@ -386,31 +377,28 @@ fun ActivationScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0288D1)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF0288D1)
-                )
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.5f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan)
             ) {
                 Icon(
                     imageVector = Icons.Default.Send,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = Color(0xFF0288D1)
+                    tint = CyberCyan
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "تواصل معنا عبر تيليجرام للدفع أو التجديد ✈️",
-                    fontSize = 14.sp,
+                    text = "تواصل معنا عبر تيليجرام للدعم أو التجديد",
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0288D1)
+                    color = CyberCyan
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // شارة الأمان في الأسفل
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -418,14 +406,14 @@ fun ActivationScreen(
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = null,
-                    tint = Color(0xFF94A3B8),
+                    tint = TextMuted,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "نظام التراخيص مشفر عتادياً ومربوط بالسحابة بأمان",
+                    text = "نظام التراخيص مشفر عتادياً ومحمي محلياً",
                     fontSize = 11.sp,
-                    color = Color(0xFF94A3B8)
+                    color = TextMuted
                 )
             }
         }

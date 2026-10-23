@@ -228,4 +228,6 @@ class ZeroClutterFakeLogRepository : LogRepository {
     override suspend fun clearAllLogs() { logs.clear() }
     override suspend fun getStats(): DashboardStats = DashboardStats()
     override suspend fun pruneOldLogs(keepCount: Int): Int = 0
+    override suspend fun getRecentLogsForPhone(phone: String, limit: Int): List<ActivityLog> =
+        logs.filter { it.senderPhone == phone }.take(limit)
 }

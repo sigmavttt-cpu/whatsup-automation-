@@ -1,6 +1,7 @@
 package com.whatsup.automation.presentation.screens.statuses.components
 
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -87,6 +88,7 @@ fun StatusStoryCard(
     // إطار توهجي أنيق حسب الحالة
     val borderBrush = when {
         isMuted -> Brush.linearGradient(listOf(RoseError.copy(alpha = 0.4f), Color(0x10FFFFFF)))
+        story.isSaved -> Brush.linearGradient(listOf(ElectricBlue.copy(alpha = 0.6f), Color(0x15FFFFFF)))
         isFavorite -> ObsidianGlowBorder.Amber
         story.isReacted -> ObsidianGlowBorder.Emerald
         else -> Brush.linearGradient(listOf(Color(0x2500E676), Color(0x10FFFFFF)))
@@ -191,15 +193,15 @@ fun StatusStoryCard(
                         } else {
                             val isViewed = story.isViewed || story.isReacted
                             Icon(
-                                imageVector = if (isViewed) Icons.Outlined.Visibility else Icons.Filled.Visibility,
-                                contentDescription = "مشاهدة",
-                                tint = if (isViewed) TextMuted else WhatsAppGreen,
+                                imageVector = if (story.isSaved) Icons.Filled.Bookmark else if (isViewed) Icons.Outlined.Visibility else Icons.Filled.Visibility,
+                                contentDescription = "الحالة",
+                                tint = if (story.isSaved) ElectricBlue else if (isViewed) TextMuted else WhatsAppGreen,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = if (isViewed) "تمت المشاهدة" else "حالة جديدة",
+                                text = if (story.isSaved) "محفوظة 📥" else if (isViewed) "تمت المشاهدة" else "حالة جديدة",
                                 fontSize = 11.sp,
-                                color = if (isViewed) TextMuted else WhatsAppGreenLight
+                                color = if (story.isSaved) ElectricBlue else if (isViewed) TextMuted else WhatsAppGreenLight
                             )
                         }
 
@@ -260,10 +262,11 @@ fun StatusStoryCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(0x1A00E676))
+                    .background(if (story.isSaved || isDownloadedState) Color(0x2800E676) else Color(0x1A00E676))
             ) {
+                val isSaved = story.isSaved || isDownloadedState
                 val isText = story.mediaType == StatusMediaType.TEXT
-                val icon = if (isDownloadedState) {
+                val icon = if (isSaved) {
                     Icons.Filled.Check
                 } else if (isText) {
                     Icons.Outlined.ContentCopy
@@ -272,8 +275,8 @@ fun StatusStoryCard(
                 }
                 Icon(
                     imageVector = icon,
-                    contentDescription = if (isText) "نسخ النص" else "تحميل الحالة",
-                    tint = if (isDownloadedState) WhatsAppGreenLight else WhatsAppGreen,
+                    contentDescription = if (isSaved) "تم الحفظ في المحفوظات" else if (isText) "نسخ النص" else "تحميل الحالة",
+                    tint = if (isSaved) WhatsAppGreenLight else WhatsAppGreen,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -310,11 +313,26 @@ private fun StatusPreviewThumbnailBox(
         scenicGradients[idx]
     }
 
-    val localBitmap = remember(story.mediaUrl) {
-        if (!story.mediaUrl.isNullOrBlank()) {
+    val localBitmap = remember(story.savedFilePath, story.mediaUrl) {
+        val path = story.savedFilePath ?: story.mediaUrl
+        if (!path.isNullOrBlank()) {
             try {
-                val f = File(story.mediaUrl)
-                if (f.exists() && f.length() > 0) BitmapFactory.decodeFile(f.absolutePath) else null
+                val f = File(path)
+                if (f.exists() && f.length() > 0) {
+                    if (story.mediaType == StatusMediaType.VIDEO) {
+                        try {
+                            val retriever = MediaMetadataRetriever()
+                            retriever.setDataSource(f.absolutePath)
+                            val frame = retriever.frameAtTime
+                            retriever.release()
+                            frame
+                        } catch (_: Exception) {
+                            null
+                        }
+                    } else {
+                        BitmapFactory.decodeFile(f.absolutePath)
+                    }
+                } else null
             } catch (_: Exception) {
                 null
             }
@@ -335,6 +353,22 @@ private fun StatusPreviewThumbnailBox(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
+            if (story.mediaType == StatusMediaType.VIDEO) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         } else {
             when (story.mediaType) {
                 StatusMediaType.TEXT -> {
@@ -396,6 +430,27 @@ private fun StatusPreviewThumbnailBox(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
+                )
+            }
+        }
+
+        // شارة الحفظ في الجهاز (المحفوظات)
+        if (story.isSaved) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(3.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(ElectricBlue)
+                    .border(0.8.dp, Color.Black.copy(alpha = 0.4f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Bookmark,
+                    contentDescription = "محفوظة",
+                    tint = Color.White,
+                    modifier = Modifier.size(10.dp)
                 )
             }
         }

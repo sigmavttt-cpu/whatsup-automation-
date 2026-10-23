@@ -54,6 +54,9 @@ interface LogDao {
     @Query("SELECT * FROM activity_logs WHERE timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
     fun getLogsSince(sinceTimestamp: Long): Flow<List<LogEntity>>
 
+    @Query("SELECT * FROM activity_logs WHERE senderPhone = :phone ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentLogsForPhone(phone: String, limit: Int = 10): List<LogEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: LogEntity): Long
 
@@ -116,8 +119,17 @@ interface StatusDao {
     @Query("UPDATE statuses SET isReacted = 1, reactionEmoji = :emoji WHERE id = :statusId")
     suspend fun reactToStatus(statusId: String, emoji: String)
 
-    @Query("DELETE FROM statuses WHERE timestamp < :olderThanTimestamp AND isDeleted = 0")
+    @Query("DELETE FROM statuses WHERE timestamp < :olderThanTimestamp AND isDeleted = 0 AND isSaved = 0")
     suspend fun deleteExpiredStatuses(olderThanTimestamp: Long)
+
+    @Query("UPDATE statuses SET isSaved = :isSaved, savedFilePath = :savedFilePath, savedAt = :savedAt WHERE id = :statusId")
+    suspend fun updateSaved(statusId: String, isSaved: Boolean, savedFilePath: String?, savedAt: Long? = System.currentTimeMillis())
+
+    @Query("UPDATE statuses SET mediaUrl = :mediaUrl WHERE id = :statusId")
+    suspend fun updateMediaUrl(statusId: String, mediaUrl: String)
+
+    @Query("SELECT * FROM statuses WHERE isSaved = 1 ORDER BY savedAt DESC, timestamp DESC")
+    fun getSavedStatuses(): Flow<List<StatusEntity>>
 
     @Query("UPDATE statuses SET isFavorite = :isFavorite WHERE id = :statusId")
     suspend fun updateFavorite(statusId: String, isFavorite: Boolean)
@@ -136,6 +148,12 @@ interface StatusDao {
 
     @Query("DELETE FROM statuses WHERE isDeleted = 1 AND deletedAt < :olderThanTimestamp")
     suspend fun deleteExpiredDeletedStatuses(olderThanTimestamp: Long)
+
+    @Query("DELETE FROM statuses WHERE id IN (:statusIds)")
+    suspend fun deleteStatusesByIds(statusIds: List<String>)
+
+    @Query("DELETE FROM statuses WHERE id = :statusId")
+    suspend fun deleteStatusById(statusId: String)
 }
 
 data class GroupWithMemberCount(

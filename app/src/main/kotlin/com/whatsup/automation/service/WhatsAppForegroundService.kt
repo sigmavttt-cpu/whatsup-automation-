@@ -21,6 +21,7 @@ import com.whatsup.automation.data.engine.WhatsAppEngine
 import com.whatsup.automation.data.security.SessionKeystore
 import com.whatsup.automation.domain.usecase.ActionResult
 import com.whatsup.automation.domain.model.ConnectionState
+import com.whatsup.automation.domain.model.IncomingMessage
 import com.whatsup.automation.domain.usecase.ProcessResult
 import com.whatsup.automation.domain.repository.StatusRepository
 import com.whatsup.automation.domain.usecase.ProcessIncomingMessageUseCase
@@ -65,6 +66,9 @@ class WhatsAppForegroundService : Service() {
 
     @Inject
     lateinit var licenseManager: com.whatsup.automation.data.security.LicenseManager
+
+    @Inject
+    lateinit var messageBurstBuffer: com.whatsup.automation.domain.util.MessageBurstBuffer
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wakeLock: PowerManager.WakeLock? = null
@@ -231,6 +235,7 @@ class WhatsAppForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        messageBurstBuffer.clear()
         serviceHealthMonitor.notifyServiceStopped()
         unregisterNetworkMonitoring()
         releaseWakeLock()
@@ -273,7 +278,10 @@ class WhatsAppForegroundService : Service() {
                 } else {
                     when (state) {
                         is ConnectionState.Connected -> "متصل ونشط — الأتمتة تعمل ✅"
-                        is ConnectionState.AwaitingPairing -> "في انتظار الربط (QR أو Pairing Code) ⏳"
+                        is ConnectionState.AwaitingPairing -> {
+                            ensureWakeLockHeld()
+                            "في انتظار الربط (QR أو Pairing Code) ⏳"
+                        }
                         is ConnectionState.Reconnecting -> "جارٍ إعادة الاتصال... 🔄"
                         is ConnectionState.Disconnected -> "غير متصل ⏸️"
                         is ConnectionState.Error -> "خطأ: ${state.message} ⚠️"
@@ -309,59 +317,72 @@ class WhatsAppForegroundService : Service() {
                         return@collect
                     }
 
-                    // حجز المعالجة ذرياً لمنع أي تنافس أو ردود مزدوجة
-                    val claimed = whatsAppEngine.tryClaimMessageProcessing(targetPhone, message.text)
-                    if (!claimed) {
-                        return@collect
+                    // تمرير الرسالة عبر مخزن تجميع الرسائل المتتالية السريعة
+                    messageBurstBuffer.enqueue(message, serviceScope) { aggregatedMessage ->
+                        processAggregatedMessage(aggregatedMessage)
                     }
-                    if (message.senderName.isNotBlank() && message.senderName != targetPhone) {
-                        whatsAppEngine.markMessageHandled(message.senderName, message.text)
-                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("WhatsAppForegroundService", "Error buffering message: ${e.message}", e)
+                }
+            }
+        }
+    }
 
-                    // معالجة الرسالة عبر استخدامات الدومين
-                    val result = processIncomingMessageUseCase.execute(message)
+    private suspend fun processAggregatedMessage(message: IncomingMessage) {
+        try {
+            val targetPhone = message.realPhone ?: message.senderPhone
 
-                    // في حالة تنفيذ قاعدة تتطلب إرسال رد
-                    if (result is ProcessResult.Executed) {
-                        for (actionResult in result.actions) {
-                            when (actionResult) {
-                                is ActionResult.ReplySent -> {
-                                    if (actionResult.message.isNotBlank()) {
-                                        val shieldResult = antiBanShieldManager.evaluateMessageReply(
-                                            senderPhone = targetPhone,
-                                            incomingText = message.text,
-                                            replyText = actionResult.message
+            // حجز المعالجة ذرياً لمنع أي تنافس أو ردود مزدوجة
+            val claimed = whatsAppEngine.tryClaimMessageProcessing(targetPhone, message.text)
+            if (!claimed) {
+                return
+            }
+            if (message.senderName.isNotBlank() && message.senderName != targetPhone) {
+                whatsAppEngine.markMessageHandled(message.senderName, message.text)
+            }
+
+            // معالجة الرسالة عبر استخدامات الدومين
+            val result = processIncomingMessageUseCase.execute(message)
+
+            // في حالة تنفيذ قاعدة تتطلب إرسال رد
+            if (result is ProcessResult.Executed) {
+                for (actionResult in result.actions) {
+                    when (actionResult) {
+                        is ActionResult.ReplySent -> {
+                            if (actionResult.message.isNotBlank()) {
+                                val shieldResult = antiBanShieldManager.evaluateMessageReply(
+                                    senderPhone = targetPhone,
+                                    incomingText = message.text,
+                                    replyText = actionResult.message
+                                )
+                                when (shieldResult) {
+                                    is com.whatsup.automation.data.engine.ShieldCheckResult.Allowed -> {
+                                        whatsAppEngine.sendMessage(
+                                            recipientPhone = targetPhone,
+                                            messageText = actionResult.message,
+                                            typingDelayMs = shieldResult.typingDelayMs,
+                                            markRead = shieldResult.settings.simulateReading,
+                                            messageId = message.id,
+                                            readDelayMs = shieldResult.readDelayMs
                                         )
-                                        when (shieldResult) {
-                                            is com.whatsup.automation.data.engine.ShieldCheckResult.Allowed -> {
-                                                whatsAppEngine.sendMessage(
-                                                    recipientPhone = targetPhone,
-                                                    messageText = actionResult.message,
-                                                    typingDelayMs = shieldResult.typingDelayMs,
-                                                    markRead = shieldResult.settings.simulateReading,
-                                                    messageId = message.id,
-                                                    readDelayMs = shieldResult.readDelayMs
-                                                )
-                                            }
-                                            is com.whatsup.automation.data.engine.ShieldCheckResult.Throttled -> {
-                                                whatsAppEngine.logDiagnosticEvent(
-                                                    "SHIELD",
-                                                    "🛡️ تم كتم الرد التلقائي على $targetPhone (${shieldResult.reason})"
-                                                )
-                                            }
-                                        }
                                     }
-                                }
-                                is ActionResult.Error -> {
-                                    // مسجل مسبقاً في ActivityLog
+                                    is com.whatsup.automation.data.engine.ShieldCheckResult.Throttled -> {
+                                        whatsAppEngine.logDiagnosticEvent(
+                                            "SHIELD",
+                                            "🛡️ تم كتم الرد التلقائي على $targetPhone (${shieldResult.reason})"
+                                        )
+                                    }
                                 }
                             }
                         }
+                        is ActionResult.Error -> {
+                            // مسجل مسبقاً في ActivityLog
+                        }
                     }
-                } catch (e: Throwable) {
-                    android.util.Log.e("WhatsAppForegroundService", "Error processing message: ${e.message}", e)
                 }
             }
+        } catch (e: Throwable) {
+            android.util.Log.e("WhatsAppForegroundService", "Error processing aggregated message: ${e.message}", e)
         }
     }
 
@@ -382,8 +403,24 @@ class WhatsAppForegroundService : Service() {
                     // فحص قاعدة البيانات مسبقاً قبل أي إجراء
                     val existing = statusRepository.getStatusById(status.id)
 
-                    // حفظ الحالة في Room (مع الحفاظ على حالة المشاهدة والتفاعل السابقة)
-                    statusRepository.insertStatus(status)
+                    val toInsert = if (existing != null) {
+                        status.copy(
+                            isViewed = existing.isViewed || status.isViewed,
+                            viewedAt = existing.viewedAt ?: status.viewedAt,
+                            isReacted = existing.isReacted || status.isReacted,
+                            reactionEmoji = existing.reactionEmoji ?: status.reactionEmoji,
+                            reactionSentAt = existing.reactionSentAt ?: status.reactionSentAt,
+                            isFavorite = existing.isFavorite || status.isFavorite,
+                            isMuted = existing.isMuted || status.isMuted,
+                            isSaved = existing.isSaved || status.isSaved,
+                            savedFilePath = existing.savedFilePath ?: status.savedFilePath,
+                            savedAt = existing.savedAt ?: status.savedAt,
+                            mediaUrl = status.mediaUrl ?: existing.mediaUrl
+                        )
+                    } else {
+                        status
+                    }
+                    statusRepository.insertStatus(toInsert)
 
                     val settings = statusRepository.getSettings().first()
 
@@ -538,6 +575,14 @@ class WhatsAppForegroundService : Service() {
     private fun unregisterNetworkMonitoring() {
         try {
             networkCallback?.let { connectivityManager?.unregisterNetworkCallback(it) }
+        } catch (_: Exception) {}
+    }
+
+    private fun ensureWakeLockHeld() {
+        try {
+            if (wakeLock == null || wakeLock?.isHeld != true) {
+                acquireWakeLock()
+            }
         } catch (_: Exception) {}
     }
 

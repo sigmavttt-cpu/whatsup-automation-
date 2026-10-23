@@ -59,6 +59,9 @@ class WhatsAppEngine @Inject constructor(
     private val _pairingCode = MutableStateFlow<String?>(null)
     val pairingCode: StateFlow<String?> = _pairingCode.asStateFlow()
 
+    private val _pairingError = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val pairingError: SharedFlow<String> = _pairingError.asSharedFlow()
+
     private val _incomingMessages = MutableSharedFlow<IncomingMessage>(extraBufferCapacity = 64)
     val incomingMessages: SharedFlow<IncomingMessage> = _incomingMessages.asSharedFlow()
 
@@ -203,8 +206,10 @@ class WhatsAppEngine @Inject constructor(
      */
     fun refreshRealConnectionState(): Boolean {
         val isSessionActive = hasSavedSession()
-        _connectionState.value = if (isSessionActive) {
+        _connectionState.value = if (isSessionActive && baileysBridgeManager.isBridgeReady.value) {
             ConnectionState.Connected
+        } else if (isSessionActive) {
+            ConnectionState.Reconnecting()
         } else {
             ConnectionState.Disconnected
         }
@@ -219,7 +224,7 @@ class WhatsAppEngine @Inject constructor(
         if (hasSavedSession()) {
             logDiagnosticEvent("ENGINE", "جلسة محفوظة موجودة، بدء تشغيل محرك Baileys تلقائياً...")
             baileysBridgeManager.start()
-            _connectionState.value = ConnectionState.Connected
+            _connectionState.value = if (baileysBridgeManager.isBridgeReady.value) ConnectionState.Connected else ConnectionState.Reconnecting()
         } else {
             logDiagnosticEvent("ENGINE", "لا توجد جلسة محفوظة — المحرك في وضع الانتظار عند الطلب لتوفير موارد الهاتف.")
             _connectionState.value = ConnectionState.Disconnected
@@ -270,7 +275,9 @@ class WhatsAppEngine @Inject constructor(
             }
 
             if (!isReady) {
-                _connectionState.value = ConnectionState.Error("تعذر الاتصال بمحرك واتساب المحلي")
+                val err = "تعذر الاتصال بمحرك واتساب المحلي، يرجى إعادة المحاولة بعد ثوانٍ"
+                _connectionState.value = ConnectionState.Error(err)
+                _pairingError.emit(err)
                 return@launch
             }
 
@@ -278,7 +285,9 @@ class WhatsAppEngine @Inject constructor(
 
             val success = baileysBridgeManager.requestPairingCode(cleanPhone)
             if (!success) {
-                _connectionState.value = ConnectionState.Error("تعذر الاتصال بمحرك واتساب المحلي")
+                val err = "تعذر إرسال طلب كود الاقتران إلى المحرك المحلي"
+                _connectionState.value = ConnectionState.Error(err)
+                _pairingError.emit(err)
             }
         }
     }
@@ -287,8 +296,16 @@ class WhatsAppEngine @Inject constructor(
      * تأكيد الاقتران بنجاح وتفعيل الجلسة.
      */
     fun confirmPairingSuccess(phone: String) {
-        sessionKeystore.setSessionActive(true)
-        sessionKeystore.setSessionPhone(phone)
+        val authDir = java.io.File(context.filesDir, "baileys_auth")
+        val credsFile = java.io.File(authDir, "creds.json")
+        val isVerifiedOnDisk = credsFile.exists() && credsFile.length() > 50
+
+        if (isVerifiedOnDisk) {
+            sessionKeystore.setSessionActive(true)
+        }
+        if (phone.isNotEmpty()) {
+            sessionKeystore.setSessionPhone(phone)
+        }
         sessionKeystore.setLastConnectedTimestamp(System.currentTimeMillis())
         _connectionState.value = ConnectionState.Connected
         _qrCode.value = null
@@ -310,6 +327,24 @@ class WhatsAppEngine @Inject constructor(
             baileysBridgeManager.logout()
             handleSessionLoggedOut()
         }
+    }
+
+    /**
+     * تنظيف شامل لكافة البيانات العالقة والمقابس القديمة لإعادة التهيئة من الصفر.
+     */
+    fun cleanStalePairingData() {
+        logDiagnosticEvent("CLEANUP", "User initiated full stale data and socket cleanup.")
+        baileysBridgeManager.cleanStaleData()
+        try {
+            val authDir = java.io.File(context.filesDir, "baileys_auth")
+            if (authDir.exists()) {
+                authDir.deleteRecursively()
+            }
+        } catch (_: Exception) {}
+        sessionKeystore.clearSession()
+        _connectionState.value = ConnectionState.Disconnected
+        _qrCode.value = null
+        _pairingCode.value = null
     }
 
     /**
@@ -510,6 +545,17 @@ class WhatsAppEngine @Inject constructor(
     }
 
     /**
+     * طلب تنزيل وسائط الحالة عند الطلب من محرك واتساب.
+     */
+    suspend fun downloadStatusMedia(statusId: String): Boolean {
+        val cmd = org.json.JSONObject().apply {
+            put("action", "DOWNLOAD_STATUS_MEDIA")
+            put("statusId", statusId)
+        }
+        return baileysBridgeManager.sendCommand(cmd)
+    }
+
+    /**
      * معالجة أحداث IPC الواردة من محرك Baileys المحلي (index.js).
      * صيغة الحدث: [WHATSAPP_EVENT]{"event":"...", "data":{...}}
      */
@@ -561,6 +607,31 @@ class WhatsAppEngine @Inject constructor(
                         logDiagnosticEvent("PAIRING", "Pairing Code generated: $code")
                     }
                 }
+                "PAIRING_ERROR" -> {
+                    val error = data.optString("error", "فشل طلب كود الاقتران من واتساب")
+                    logDiagnosticEvent("PAIRING", "Error: $error")
+                    _pairingCode.value = null
+                    _connectionState.value = ConnectionState.Error(error)
+                    _pairingError.emit(error)
+                }
+                "PAIRING_FAILED" -> {
+                    val reason = data.optString("reason", "فشلت عملية الاقتران مع واتساب")
+                    logDiagnosticEvent("PAIRING", "Failed: $reason")
+                    _pairingCode.value = null
+                    _connectionState.value = ConnectionState.Error(reason)
+                    _pairingError.emit(reason)
+                }
+                "SESSION_PERSISTED" -> {
+                    val phone = data.optString("phone").filter { it.isDigit() }
+                    val isVerified = data.optBoolean("verified", true)
+                    if (isVerified) {
+                        logDiagnosticEvent("SECURITY", "Cryptographic session verified on disk for $phone")
+                        sessionKeystore.setSessionActive(true)
+                        if (phone.isNotEmpty()) {
+                            sessionKeystore.setSessionPhone("+$phone")
+                        }
+                    }
+                }
                 "CONNECTION_STATE" -> {
                     val status = data.optString("status")
                     logDiagnosticEvent("CONNECTION", "State changed to $status")
@@ -593,6 +664,9 @@ class WhatsAppEngine @Inject constructor(
                     val rawSenderName = data.optString("senderName", "").takeIf { it != "null" } ?: ""
                     val text = data.optString("text")
                     val isGroup = data.optBoolean("isGroup", false)
+                    val isViewOnce = data.optBoolean("isViewOnce", false)
+                    val hasMedia = data.optBoolean("hasMedia", false)
+                    val mediaTypeStr = data.optString("mediaType", "TEXT")
                     val ts = data.optLong("timestamp", System.currentTimeMillis())
 
                     val effectivePhone = realPhone ?: senderPhone
@@ -624,18 +698,22 @@ class WhatsAppEngine @Inject constructor(
                         )
                         _incomingMessages.emit(message)
                         scope.launch {
-                            vaultRepository.saveVaultItem(
-                                VaultItem(
-                                    id = id,
-                                    senderPhone = effectivePhone,
-                                    senderName = senderName,
-                                    mediaType = VaultMediaType.TEXT,
-                                    isViewOnce = false,
-                                    isDeleted = false,
-                                    originalText = text,
-                                    timestamp = ts
+                            val shouldTrack = isViewOnce || sessionKeystore.isPhoneTrackedForVault(effectivePhone)
+                            if (shouldTrack) {
+                                val resolvedMediaType = if (hasMedia) VaultMediaType.fromString(mediaTypeStr) else VaultMediaType.TEXT
+                                vaultRepository.saveVaultItem(
+                                    VaultItem(
+                                        id = id,
+                                        senderPhone = effectivePhone,
+                                        senderName = senderName,
+                                        mediaType = resolvedMediaType,
+                                        isViewOnce = isViewOnce,
+                                        isDeleted = false,
+                                        originalText = text,
+                                        timestamp = ts
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -649,6 +727,7 @@ class WhatsAppEngine @Inject constructor(
                     val rawSenderName = data.optString("senderName", "").takeIf { it != "null" } ?: ""
                     val mediaTypeStr = data.optString("mediaType", "TEXT")
                     val textContent = data.optString("textContent").takeIf { it.isNotEmpty() && it != "null" }
+                    val mediaUrl = data.optString("mediaUrl").takeIf { it.isNotBlank() && it != "null" }
                     val ts = data.optLong("timestamp", System.currentTimeMillis())
 
                     val effectivePhone = realPhone ?: senderPhone
@@ -676,6 +755,7 @@ class WhatsAppEngine @Inject constructor(
                         senderName = senderName,
                         mediaType = mediaType,
                         textContent = textContent,
+                        mediaUrl = mediaUrl,
                         timestamp = Instant.ofEpochMilli(ts),
                         isLid = isLid,
                         realPhone = realPhone,
@@ -767,6 +847,31 @@ class WhatsAppEngine @Inject constructor(
                         logDiagnosticEvent("CONTACTS", "تحديث اسم جهة اتصال واتساب: $name ($phone)")
                     }
                 }
+                "VAULT_PROGRESS" -> {
+                    val status = data.optString("status")
+                    val message = data.optString("message", "")
+                    val senderPhone = data.optString("senderPhone", "")
+                    if (message.isNotBlank()) {
+                        logDiagnosticEvent("VAULT", message)
+                        android.util.Log.i("WhatsAppEngine", "[$status] $message ($senderPhone)")
+                        if (status == "ERROR") {
+                            scope.launch {
+                                try {
+                                    logRepository.insertLog(
+                                        ActivityLog(
+                                            timestamp = Instant.now(),
+                                            senderPhone = senderPhone.ifBlank { "الخزينة" },
+                                            messageText = message,
+                                            matchedRule = "وسائط العرض لمرة واحدة",
+                                            actionExecuted = "تعذر فك التشفير أو الحفظ",
+                                            status = LogStatus.FAILURE
+                                        )
+                                    )
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                }
                 "VAULT_MEDIA_CAPTURED" -> {
                     val id = data.optString("id")
                     val senderPhone = data.optString("senderPhone", "")
@@ -780,33 +885,68 @@ class WhatsAppEngine @Inject constructor(
                     val ts = data.optLong("timestamp", System.currentTimeMillis())
 
                     scope.launch {
-                        vaultRepository.saveVaultItem(
-                            VaultItem(
-                                id = id,
-                                senderPhone = senderPhone,
-                                senderName = senderName,
-                                mediaType = VaultMediaType.fromString(mediaTypeStr),
-                                isViewOnce = isViewOnce,
-                                isDeleted = false,
-                                originalText = originalText,
-                                localFilePath = localFilePath,
-                                mimeType = mimeType,
-                                fileSizeBytes = fileSizeBytes,
-                                timestamp = ts
+                        val shouldTrack = isViewOnce || sessionKeystore.isPhoneTrackedForVault(senderPhone)
+                        if (shouldTrack) {
+                            vaultRepository.saveVaultItem(
+                                VaultItem(
+                                    id = id,
+                                    senderPhone = senderPhone,
+                                    senderName = senderName,
+                                    mediaType = VaultMediaType.fromString(mediaTypeStr),
+                                    isViewOnce = isViewOnce,
+                                    isDeleted = false,
+                                    originalText = originalText,
+                                    localFilePath = localFilePath,
+                                    mimeType = mimeType,
+                                    fileSizeBytes = fileSizeBytes,
+                                    timestamp = ts
+                                )
                             )
-                        )
-                        logDiagnosticEvent("VAULT", "🔒 تم التقاط وسائط عرض لمرة واحدة من $senderPhone بنجاح.")
+                            logDiagnosticEvent("VAULT", "🔒 تم التقاط وسائط في الخزينة من $senderPhone بنجاح.")
+                            try {
+                                val mediaLabel = if (isViewOnce) "صورة/وسائط عرض لمرة واحدة 🔒" else "وسائط دردشة"
+                                val sizeKb = Math.round(fileSizeBytes / 1024.0)
+                                logRepository.insertLog(
+                                    ActivityLog(
+                                        timestamp = Instant.ofEpochMilli(ts),
+                                        senderPhone = senderPhone.ifBlank { "مجهول" },
+                                        messageText = originalText.ifBlank { "[$mediaLabel]" },
+                                        matchedRule = if (isViewOnce) "كاشف العرض لمرة واحدة (Anti-View-Once)" else "حفظ وسائط الخزينة",
+                                        actionExecuted = "تم فك التشفير والحفظ بنجاح ($sizeKb KB)",
+                                        status = LogStatus.SUCCESS,
+                                        extractedName = senderName.ifBlank { null }
+                                    )
+                                )
+                            } catch (_: Exception) {}
+                        } else {
+                            logDiagnosticEvent("VAULT", "تجاهل حفظ الوسائط من $senderPhone لعدم شمول الرقم بقائمة التتبع المحددة.")
+                        }
                     }
                 }
                 "MESSAGE_REVOKED" -> {
                     val revokedId = data.optString("id")
                     val senderPhone = data.optString("senderPhone", "")
                     scope.launch {
-                        vaultRepository.markMessageAsDeleted(revokedId)
-                        try {
-                            statusDao.markAsDeleted(revokedId, System.currentTimeMillis())
-                        } catch (_: Exception) {}
-                        logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة/حالة وحفظها في الخزينة: $revokedId ($senderPhone)")
+                        if (sessionKeystore.isPhoneTrackedForVault(senderPhone)) {
+                            vaultRepository.markMessageAsDeleted(revokedId)
+                            try {
+                                statusDao.markAsDeleted(revokedId, System.currentTimeMillis())
+                            } catch (_: Exception) {}
+                            logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة/حالة وحفظها في الخزينة: $revokedId ($senderPhone)")
+                        }
+                    }
+                }
+                "STATUS_MEDIA_DOWNLOADED" -> {
+                    val statusId = data.optString("id")
+                    val mediaUrl = data.optString("mediaUrl").takeIf { it.isNotBlank() && it != "null" }
+                    val success = data.optBoolean("success", false)
+                    if (success && !mediaUrl.isNullOrBlank()) {
+                        scope.launch {
+                            try {
+                                statusDao.updateMediaUrl(statusId, mediaUrl)
+                                logDiagnosticEvent("STATUS", "✅ تم اكتمال تنزيل وسائط الحالة ($statusId): $mediaUrl")
+                            } catch (_: Exception) {}
+                        }
                     }
                 }
             }

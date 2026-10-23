@@ -9,7 +9,10 @@ import makeWASocket, {
     useMultiFileAuthState,
     fetchLatestBaileysVersion,
     downloadMediaMessage,
-    downloadContentFromMessage
+    downloadContentFromMessage,
+    normalizeMessageContent,
+    extractMessageContent,
+    getContentType
 } from '@whiskeysockets/baileys';
 import {
     CONFIG,
@@ -18,6 +21,7 @@ import {
     rawMessagesCache,
     msgRetryCounterCache
 } from './config.js';
+import { downloadAndDecryptMedia } from './media-downloader.js';
 import { initBridge, emitToAndroid } from './bridge.js';
 import {
     loadLidPhoneMap,
@@ -115,16 +119,41 @@ async function handleContactsBatch(contactsList, authFolder = currentAuthFolder)
 }
 
 /**
+ * ينهي المقبس القديم بشكل جذري ويفرغ مستمعي الأحداث لمنع المقابس الشبحية وتسرب الذاكرة.
+ */
+function terminateExistingSocket() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+    if (sock) {
+        try {
+            if (sock.ev && typeof sock.ev.removeAllListeners === 'function') {
+                sock.ev.removeAllListeners();
+            }
+        } catch (_) {}
+        try {
+            if (sock.ws && typeof sock.ws.close === 'function') {
+                sock.ws.close();
+            }
+        } catch (_) {}
+        try {
+            if (typeof sock.end === 'function') {
+                sock.end();
+            }
+        } catch (_) {}
+        sock = null;
+    }
+}
+
+/**
  * Starts or restarts the Baileys WhatsApp session.
  */
 export async function startWhatsAppSession(authFolder = currentAuthFolder) {
     if (isStarting) return;
     isStarting = true;
 
-    if (sock) {
-        try { sock.end(); } catch (_) {}
-        sock = null;
-    }
+    terminateExistingSocket();
 
     loadStatusKeys(authFolder);
     loadLidPhoneMap(authFolder);
@@ -151,7 +180,21 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
 
     attachSocketTraceHook(sock);
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', async () => {
+        try {
+            await saveCreds();
+            const credsFile = path.join(authFolder, 'creds.json');
+            if (fs.existsSync(credsFile) && fs.statSync(credsFile).size > 50 && sock?.user) {
+                const userPhone = sock.user.id ? String(sock.user.id).replace(/[^0-9]/g, '').substring(0, 15) : '';
+                emitToAndroid('SESSION_PERSISTED', {
+                    phone: userPhone,
+                    verified: true
+                });
+            }
+        } catch (e) {
+            console.error('[creds.update] Error saving and verifying creds:', e);
+        }
+    });
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -185,6 +228,25 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                 });
             }
 
+            // فحص ما إذا كان الانقطاع حدث أثناء مرحلة ربط الجهاز وقبل المصادقة
+            const isPairingPhase = !sock?.authState?.creds?.registered && !sock?.user;
+            if (isPairingPhase && lastDisconnect?.error) {
+                let pairingReason = 'فشلت عملية الربط مع تطبيق واتساب.';
+                if (statusCode === 401 || statusCode === 403) {
+                    pairingReason = 'تم رفض كود الاقتران أو إلغاء ربط الجهاز من تطبيق واتساب.';
+                } else if (statusCode === 408 || statusCode === 428) {
+                    pairingReason = 'انتهت مهلة ربط الجهاز أو انقطع الاتصال أثناء المصادقة مع واتساب.';
+                } else if (statusCode === 515) {
+                    pairingReason = 'مطلوب إعادة تشغيل المحرك لاستكمال الاقتران بنجاح.';
+                } else if (lastDisconnect.error.message) {
+                    pairingReason = `تعذر إتمام الاقتران: ${lastDisconnect.error.message}`;
+                }
+                emitToAndroid('PAIRING_FAILED', {
+                    reason: pairingReason,
+                    statusCode: statusCode || 0
+                });
+            }
+
             emitToAndroid('CONNECTION_STATE', {
                 status: 'DISCONNECTED',
                 reconnecting: shouldReconnect,
@@ -204,6 +266,15 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                 await sock.sendPresenceUpdate('available');
             } catch (_) {}
 
+            // فحص وتأكيد كتابة ملف creds.json المشفر بالقرص
+            let isCredsVerified = false;
+            try {
+                const credsFile = path.join(authFolder, 'creds.json');
+                if (fs.existsSync(credsFile) && fs.statSync(credsFile).size > 50) {
+                    isCredsVerified = true;
+                }
+            } catch (_) {}
+
             // مستشعر النبض الحي (Heartbeat Pinger) لفحص حيوية المقبس كل 45 ثانية وكشف السقوط الصامت
             if (heartbeatInterval) clearInterval(heartbeatInterval);
             heartbeatInterval = setInterval(async () => {
@@ -221,8 +292,7 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                             reconnecting: true,
                             reason: 'انقطع اتصال المقبس بصمت (Silent Socket Drop)'
                         });
-                        try { sock.end(); } catch (_) {}
-                        sock = null;
+                        terminateExistingSocket();
                         setTimeout(() => startWhatsAppSession(authFolder), 3000);
                     }
                 }
@@ -233,8 +303,17 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                 user: {
                     id: user?.id,
                     name: user?.name || user?.notify || ''
-                }
+                },
+                sessionVerified: isCredsVerified
             });
+
+            if (isCredsVerified && user?.id) {
+                const cleanPhone = String(user.id).replace(/[^0-9]/g, '').substring(0, 15);
+                emitToAndroid('SESSION_PERSISTED', {
+                    phone: cleanPhone,
+                    verified: true
+                });
+            }
 
             const count = getStatusKeysCount();
             emitToAndroid('STATUS_FETCH_DONE', {
@@ -334,138 +413,157 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
         }
     });
 
+/**
+ * فك التغليف العودي الدقيق للرسائل المركبة (deviceSentMessage, ephemeralMessage, viewOnceMessage, إلخ)
+ * وتحديد وسائط العرض لمرة واحدة بشكل موثوق 100%.
+ */
+function unwrapAndInspectMessage(rawMsg) {
+    let current = rawMsg;
+    let isViewOnce = false;
+    let depth = 0;
+    while (current && depth < 10) {
+        depth++;
+        if (current.viewOnceMessage?.message) {
+            isViewOnce = true;
+            current = current.viewOnceMessage.message;
+            continue;
+        }
+        if (current.viewOnceMessageV2?.message) {
+            isViewOnce = true;
+            current = current.viewOnceMessageV2.message;
+            continue;
+        }
+        if (current.viewOnceMessageV2Extension?.message) {
+            isViewOnce = true;
+            current = current.viewOnceMessageV2Extension.message;
+            continue;
+        }
+        if (current.ephemeralMessage?.message) {
+            current = current.ephemeralMessage.message;
+            continue;
+        }
+        if (current.documentWithCaptionMessage?.message) {
+            current = current.documentWithCaptionMessage.message;
+            continue;
+        }
+        if (current.deviceSentMessage?.message) {
+            current = current.deviceSentMessage.message;
+            continue;
+        }
+        break;
+    }
+
+    const extracted = (typeof extractMessageContent === 'function' ? extractMessageContent(current) : null)
+                      || (typeof normalizeMessageContent === 'function' ? normalizeMessageContent(current) : null)
+                      || current;
+
+    if (extracted?.imageMessage?.viewOnce ||
+        extracted?.videoMessage?.viewOnce ||
+        extracted?.audioMessage?.viewOnce ||
+        extracted?.viewOnce ||
+        rawMsg?.imageMessage?.viewOnce ||
+        rawMsg?.videoMessage?.viewOnce ||
+        rawMsg?.audioMessage?.viewOnce) {
+        isViewOnce = true;
+    }
+
+    return { leaf: extracted, isViewOnce };
+}
+
     // Messages listener: processes incoming status stories and regular chat messages
     sock.ev.on('messages.upsert', async ({ messages }) => {
         for (const msg of messages) {
-            // Cache raw message for PreKey retry decryption requests
-            if (msg.key?.id && msg.message) {
-                rawMessagesCache.set(msg.key.id, msg.message);
-                if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
-                    const firstKey = rawMessagesCache.keys().next().value;
-                    rawMessagesCache.delete(firstKey);
+            try {
+                // Cache raw message for PreKey retry decryption requests
+                if (msg.key?.id && msg.message) {
+                    rawMessagesCache.set(msg.key.id, msg.message);
+                    if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
+                        const firstKey = rawMessagesCache.keys().next().value;
+                        rawMessagesCache.delete(firstKey);
+                    }
                 }
-            }
 
-            // Status stories
-            if (msg.key?.remoteJid === 'status@broadcast') {
-                if (msg.key.fromMe || !msg.message) continue;
-                await processStatusMessage(msg, authFolder, sock);
-                continue;
-            }
-
-            if (!msg.message || msg.key.fromMe) continue;
-
-            const remoteJid = msg.key.remoteJid || '';
-            if (remoteJid.endsWith('@newsletter') || remoteJid.includes('@broadcast')) continue;
-
-            const isGroup = remoteJid.endsWith('@g.us');
-            const actualSender = isGroup ? (msg.key.participant || '') : remoteJid;
-
-            if (actualSender.startsWith('120363')) continue;
-
-            if (msg.key?.senderPn) {
-                linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
-            }
-            if (msg.key?.participantPn) {
-                linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
-            }
-
-            const resolved = await resolvePhoneAndLid(actualSender, msg, sock);
-            const cleanPhone = resolved.realPhone || resolved.phone;
-            if (!cleanPhone || cleanPhone.startsWith('120363')) continue;
-
-            if (msg.pushName && cleanPhone) {
-                const trimmedPush = msg.pushName.trim();
-                setContactName(cleanPhone, trimmedPush);
-                if (resolved.lid) {
-                    setContactName(resolved.lid, trimmedPush);
+                // Status stories
+                if (msg.key?.remoteJid === 'status@broadcast') {
+                    if (msg.key.fromMe || !msg.message) continue;
+                    await processStatusMessage(msg, authFolder, sock);
+                    continue;
                 }
-            }
 
-            // 1. فحص وجود وسائط (عرض لمرة واحدة أو وسائط عادية)
-            let rootMsg = msg.message;
-            if (rootMsg?.ephemeralMessage?.message) {
-                rootMsg = rootMsg.ephemeralMessage.message;
-            }
-            const viewOnceObj = rootMsg?.viewOnceMessage?.message 
-                             || rootMsg?.viewOnceMessageV2?.message 
-                             || rootMsg?.viewOnceMessageV2Extension?.message;
+                if (!msg.message) continue;
 
-            const isViewOnce = !!viewOnceObj;
-            const targetMediaMsg = viewOnceObj || rootMsg;
+                // 1. استخراج فوري للأطراف والمعرفات الأساسية بدون أي انتظار
+                const remoteJid = msg.key?.remoteJid || '';
+                if (remoteJid.endsWith('@newsletter') || remoteJid.includes('@broadcast')) continue;
 
-            const isImage = !!targetMediaMsg?.imageMessage;
-            const isVideo = !!targetMediaMsg?.videoMessage;
-            const isAudio = !!targetMediaMsg?.audioMessage;
-            const isDoc = !!targetMediaMsg?.documentMessage;
-            const hasMedia = isImage || isVideo || isAudio || isDoc;
+                const isGroup = remoteJid.endsWith('@g.us');
+                const actualSender = isGroup ? (msg.key.participant || '') : remoteJid;
+                const cleanRawDigits = actualSender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
 
-            const mediaType = isImage ? 'IMAGE' : (isVideo ? 'VIDEO' : (isAudio ? 'AUDIO' : (isDoc ? 'DOCUMENT' : 'IMAGE')));
-            const mediaTypeLower = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : (isDoc ? 'document' : 'image')));
-            const mediaObj = targetMediaMsg?.imageMessage || targetMediaMsg?.videoMessage || targetMediaMsg?.audioMessage || targetMediaMsg?.documentMessage;
-            const mime = mediaObj?.mimetype || (isImage ? 'image/jpeg' : (isVideo ? 'video/mp4' : (isAudio ? 'audio/ogg' : 'application/octet-stream')));
-            const ext = isImage ? 'jpg' : (isVideo ? 'mp4' : (isAudio ? 'ogg' : 'bin'));
+                // 2. فك التغليف العودي واكتشاف وسائط العرض لمرة واحدة بدقة 100%
+                const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
 
-            if (hasMedia && mediaObj) {
+                // السماح برسائل العرض لمرة واحدة حتى لو كانت fromMe لاختبار المستخدم مع نفسه أو الطرف الآخر
+                if (msg.key?.fromMe && !isViewOnce) continue;
+
+                const contentType = typeof getContentType === 'function' ? getContentType(leaf) : null;
+
+                // 3. نبض تشخيصي حي وفوري إلى سجلات أندرويد لتأكيد وصول كل رسالة
+                emitToAndroid('VAULT_PROGRESS', {
+                    status: 'MSG_INGEST',
+                    id: msg.key?.id || '',
+                    senderPhone: cleanRawDigits || actualSender,
+                    message: `📩 رسالة واردة [${msg.key?.id ? msg.key.id.slice(-6) : 'N/A'}] من (${cleanRawDigits || actualSender}) | نوع: ${contentType || 'media'}${isViewOnce ? ' 🔒 [عرض لمرة واحدة]' : ''}`
+                });
+
+                // 4. استخراج كائن الوسائط مباشرة
+                const mediaObj = leaf?.imageMessage || 
+                                 leaf?.videoMessage || 
+                                 leaf?.audioMessage || 
+                                 leaf?.documentMessage;
+
+                const isImage = !!(leaf?.imageMessage || contentType === 'imageMessage');
+                const isVideo = !!(leaf?.videoMessage || contentType === 'videoMessage');
+                const isAudio = !!(leaf?.audioMessage || contentType === 'audioMessage');
+                const isDoc = !!(leaf?.documentMessage || contentType === 'documentMessage');
+                const hasMedia = !!mediaObj || isImage || isVideo || isAudio || isDoc;
+
+                const mediaType = isImage ? 'IMAGE' : (isVideo ? 'VIDEO' : (isAudio ? 'AUDIO' : (isDoc ? 'DOCUMENT' : 'NONE')));
+                const mediaTypeLower = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : (isDoc ? 'document' : 'image')));
+                const ext = isImage ? 'jpg' : (isVideo ? 'mp4' : (isAudio ? 'ogg' : 'bin'));
+                const mime = mediaObj?.mimetype || (isImage ? 'image/jpeg' : (isVideo ? 'video/mp4' : (isAudio ? 'audio/ogg' : 'application/octet-stream')));
+
+                // 🎯 الأولوية الصفرية الفورية: التقاط وفك تشفير وسائط العرض لمرة واحدة دون أي انتظار لحل الـ LID
+                if (hasMedia && mediaObj && isViewOnce) {
                 const vaultDir = path.join(authFolder, '..', 'vault_media');
                 try {
                     if (!fs.existsSync(vaultDir)) fs.mkdirSync(vaultDir, { recursive: true });
                 } catch (eDir) {
                     console.error('[VAULT] Failed to create vault directory:', eDir);
                 }
-                const fileNamePrefix = isViewOnce ? 'viewonce' : 'media';
-                const filePath = path.join(vaultDir, `${fileNamePrefix}_${msg.key.id}.${ext}`);
+                const filePath = path.join(vaultDir, `viewonce_${msg.key.id}.${ext}`);
+
+                emitToAndroid('VAULT_PROGRESS', {
+                    status: 'DETECTED',
+                    id: msg.key.id,
+                    senderPhone: cleanRawDigits || actualSender,
+                    mediaType: mediaType,
+                    message: `🔒 تم رصد ${mediaType === 'IMAGE' ? 'صورة' : 'وسائط'} عرض لمرة واحدة من ${cleanRawDigits || actualSender}، جاري فك التشفير والتنزيل...`
+                });
 
                 (async () => {
                     let buffer = null;
-
-                    // المحاولة 1: التنزيل المباشر الصريح لفك تشفير التدفق عبر downloadContentFromMessage
                     try {
-                        if ((mediaObj.url || mediaObj.directPath) && mediaObj.mediaKey) {
-                            const stream = await downloadContentFromMessage(mediaObj, mediaTypeLower);
-                            const chunks = [];
-                            for await (const chunk of stream) {
-                                chunks.push(chunk);
-                            }
-                            buffer = Buffer.concat(chunks);
-                        }
+                        buffer = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock, msg);
                     } catch (e1) {
-                        logger.warn(`[VAULT] downloadContentFromMessage (${mediaTypeLower}) failed: ${e1.message}`);
-                    }
-
-                    // المحاولة 2: التنزيل عبر downloadMediaMessage وسياق السوكت
-                    const downloadOptions = {
-                        logger: logger,
-                        reuploadRequest: sock?.updateMediaMessage ? sock.updateMediaMessage.bind(sock) : undefined
-                    };
-
-                    if (!buffer || buffer.length === 0) {
-                        try {
-                            buffer = await downloadMediaMessage(msg, 'buffer', {}, downloadOptions);
-                        } catch (e2) {
-                            logger.warn(`[VAULT] downloadMediaMessage original msg failed: ${e2.message}`);
-                        }
-                    }
-
-                    // المحاولة 3: التنزيل عبر رسالة تركيبية مفككة
-                    if (!buffer || buffer.length === 0) {
-                        try {
-                            const syntheticMsg = {
-                                key: msg.key,
-                                message: { [`${mediaTypeLower}Message`]: mediaObj }
-                            };
-                            buffer = await downloadMediaMessage(syntheticMsg, 'buffer', {}, downloadOptions);
-                        } catch (e3) {
-                            logger.warn(`[VAULT] downloadMediaMessage synthetic failed: ${e3.message}`);
-                        }
+                        console.error(`[VAULT] downloadAndDecryptMedia (${mediaTypeLower}) error:`, e1.message);
                     }
 
                     if (buffer && buffer.length > 0) {
                         try {
                             fs.writeFileSync(filePath, buffer);
-                            console.log(`[VAULT] Media captured successfully: ${filePath} (${buffer.length} bytes, viewOnce=${isViewOnce})`);
-                            
-                            // حفظ في الكاش لاسترجاعه فوراً عند الحذف للجميع
+                            console.log(`[VAULT] View-Once captured successfully: ${filePath} (${buffer.length} bytes, type=${mediaType})`);
+
                             rawMessagesCache.set(`media_file_${msg.key.id}`, {
                                 localFilePath: filePath,
                                 mimeType: mime,
@@ -474,27 +572,71 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                                 originalText: mediaObj?.caption || ''
                             });
 
+                            const senderDisplay = msg.pushName || getContactName(cleanRawDigits) || cleanRawDigits || actualSender;
+
                             emitToAndroid('VAULT_MEDIA_CAPTURED', {
                                 id: msg.key.id,
-                                senderPhone: cleanPhone,
-                                senderName: msg.pushName || getContactName(cleanPhone) || '',
+                                senderPhone: cleanRawDigits || actualSender,
+                                senderName: senderDisplay,
                                 mediaType: mediaType,
-                                isViewOnce: isViewOnce,
+                                isViewOnce: true,
                                 originalText: mediaObj?.caption || '',
                                 localFilePath: filePath,
                                 mimeType: mime,
                                 fileSizeBytes: buffer.length,
-                                timestamp: Date.now()
+                                timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
+                            });
+
+                            emitToAndroid('VAULT_PROGRESS', {
+                                status: 'SUCCESS',
+                                id: msg.key.id,
+                                senderPhone: cleanRawDigits || actualSender,
+                                mediaType: mediaType,
+                                message: `✅ تم فك تشفير وحفظ ${mediaType === 'IMAGE' ? 'الصورة' : 'الوسائط'} بنجاح في الخزينة (${Math.round(buffer.length / 1024)} KB)`
                             });
                         } catch (writeErr) {
                             console.error('[VAULT] Failed to write vault media file:', writeErr);
+                            emitToAndroid('VAULT_PROGRESS', {
+                                status: 'ERROR',
+                                id: msg.key.id,
+                                senderPhone: cleanRawDigits || actualSender,
+                                message: `فشل كتابة ملف الوسائط على القرص: ${writeErr.message}`
+                            });
                         }
                     } else {
                         console.warn('[VAULT] Failed to download media buffer for:', msg.key.id);
+                        emitToAndroid('VAULT_PROGRESS', {
+                            status: 'ERROR',
+                            id: msg.key.id,
+                            senderPhone: cleanRawDigits || actualSender,
+                            message: `تعذر جلب ملف الوسائط (انتهت صلاحية الرابط من واتساب أو تم رفضه).`
+                        });
                     }
                 })().catch(topErr => {
                     console.error('[VAULT] Unhandled error in media capture:', topErr);
                 });
+            }
+
+            // ربط جهات الاتصال وحل أرقام LID بهدوء لباقي العمليات (الرد التلقائي وإشعارات الرسائل)
+            if (msg.key?.senderPn) {
+                linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
+            }
+            if (msg.key?.participantPn) {
+                linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
+            }
+
+            let resolved = { phone: cleanRawDigits, realPhone: null, lid: null, isLid: false };
+            try {
+                resolved = await resolvePhoneAndLid(actualSender, msg, sock);
+            } catch (_) {}
+            const cleanPhone = resolved.realPhone || resolved.phone || cleanRawDigits;
+
+            if (msg.pushName && cleanPhone) {
+                const trimmedPush = msg.pushName.trim();
+                setContactName(cleanPhone, trimmedPush);
+                if (resolved.lid) {
+                    setContactName(resolved.lid, trimmedPush);
+                }
             }
 
             // 2. التقاط إشارة حذف الرسائل لدى الجميع (Anti-Delete Revocation)
@@ -525,19 +667,18 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
             }
 
             // 3. استخراج النص أو وضع نص بديل للوسائط بدون تعليق
-            let text = msg.message.conversation ||
-                       msg.message.extendedTextMessage?.text ||
-                       msg.message.imageMessage?.caption ||
-                       msg.message.videoMessage?.caption ||
-                       msg.message.documentMessage?.caption ||
-                       viewOnceObj?.imageMessage?.caption ||
-                       viewOnceObj?.videoMessage?.caption ||
+            let text = leaf?.conversation ||
+                       leaf?.extendedTextMessage?.text ||
+                       leaf?.imageMessage?.caption ||
+                       leaf?.videoMessage?.caption ||
+                       leaf?.documentMessage?.caption ||
+                       mediaObj?.caption ||
                        '';
 
             if (!text && hasMedia) {
                 if (isImage) text = isViewOnce ? '📷 [صورة عرض لمرة واحدة]' : '📷 [صورة]';
                 else if (isVideo) text = isViewOnce ? '🎥 [فيديو عرض لمرة واحدة]' : '🎥 [فيديو]';
-                else if (isAudio) text = '🎙️ [رسالة صوتية]';
+                else if (isAudio) text = isViewOnce ? '🎙️ [تسجيل صوتي عرض لمرة واحدة]' : '🎙️ [رسالة صوتية]';
                 else if (isDoc) text = '📄 [مستند]';
             }
 
@@ -554,8 +695,14 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
                 senderName,
                 text,
                 isGroup,
+                isViewOnce,
+                hasMedia,
+                mediaType,
                 timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
             });
+            } catch (msgErr) {
+                console.error('[MESSAGES_UPSERT] Unexpected error processing message:', msgErr);
+            }
         }
     });
 }

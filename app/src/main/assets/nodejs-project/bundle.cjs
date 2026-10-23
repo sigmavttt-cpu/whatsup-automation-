@@ -5876,10 +5876,10 @@ var require_reach = __commonJS({
       }
       const isChainArray = Array.isArray(chain);
       Assert(!isChainArray || !options.separator, "Separator option is not valid for array-based chain");
-      const path4 = isChainArray ? chain : chain.split(options.separator || ".");
+      const path5 = isChainArray ? chain : chain.split(options.separator || ".");
       let ref = obj;
-      for (let i = 0; i < path4.length; ++i) {
-        let key = path4[i];
+      for (let i = 0; i < path5.length; ++i) {
+        let key = path5[i];
         const type = options.iterables && internals.iterables(ref);
         if (Array.isArray(ref) || type === "set") {
           const number2 = Number(key);
@@ -5889,7 +5889,7 @@ var require_reach = __commonJS({
         }
         if (!ref || typeof ref === "function" && options.functions === false || // Defaults to true
         !type && ref[key] === void 0) {
-          Assert(!options.strict || i + 1 === path4.length, "Missing segment", key, "in reach path ", chain);
+          Assert(!options.strict || i + 1 === path5.length, "Missing segment", key, "in reach path ", chain);
           Assert(typeof ref === "object" || options.functions === true || typeof ref !== "function", "Invalid segment", key, "in reach path ", chain);
           ref = options.default;
           break;
@@ -6206,8 +6206,8 @@ var require_applyToDefaults = __commonJS({
       const nullOverride = options.nullOverride !== void 0 ? options.nullOverride : false;
       return Merge(copy, source, { nullOverride, mergeArrays: false });
     };
-    internals.reachCopy = function(dst, src, path4) {
-      for (const segment of path4) {
+    internals.reachCopy = function(dst, src, path5) {
+      for (const segment of path5) {
         if (!(segment in src)) {
           return;
         }
@@ -6219,14 +6219,14 @@ var require_applyToDefaults = __commonJS({
       }
       const value = src;
       let ref = dst;
-      for (let i = 0; i < path4.length - 1; ++i) {
-        const segment = path4[i];
+      for (let i = 0; i < path5.length - 1; ++i) {
+        const segment = path5[i];
         if (typeof ref[segment] !== "object") {
           ref[segment] = {};
         }
         ref = ref[segment];
       }
-      ref[path4[path4.length - 1]] = value;
+      ref[path5[path5.length - 1]] = value;
     };
   }
 });
@@ -16099,11 +16099,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path4) {
-      if (!path4 || typeof path4 !== "string") {
+    function lookup(path5) {
+      if (!path5 || typeof path5 !== "string") {
         return false;
       }
-      var extension3 = extname("x." + path4).toLowerCase().substr(1);
+      var extension3 = extname("x." + path5).toLowerCase().substr(1);
       if (!extension3) {
         return false;
       }
@@ -17208,7 +17208,7 @@ var require_form_data = __commonJS({
     "use strict";
     var CombinedStream = require_combined_stream();
     var util5 = require("util");
-    var path4 = require("path");
+    var path5 = require("path");
     var http3 = require("http");
     var https2 = require("https");
     var parseUrl2 = require("url").parse;
@@ -17339,11 +17339,11 @@ var require_form_data = __commonJS({
     FormData3.prototype._getContentDisposition = function(value, options) {
       var filename;
       if (typeof options.filepath === "string") {
-        filename = path4.normalize(options.filepath).replace(/\\/g, "/");
+        filename = path5.normalize(options.filepath).replace(/\\/g, "/");
       } else if (options.filename || value && (value.name || value.path)) {
-        filename = path4.basename(options.filename || value && (value.name || value.path));
+        filename = path5.basename(options.filename || value && (value.name || value.path));
       } else if (value && value.readable && hasOwn(value, "httpVersion")) {
-        filename = path4.basename(value.client._httpMessage.path || "");
+        filename = path5.basename(value.client._httpMessage.path || "");
       }
       if (filename) {
         return 'filename="' + escapeHeaderParam(filename) + '"';
@@ -19244,16 +19244,16 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path4) => {
-      const fd = fs7.openSync(path4, "r");
+    var readFileSync = (path5) => {
+      const fd = fs7.openSync(path5, "r");
       const buffer2 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs7.readSync(fd, buffer2, 0, MAX_LENGTH, 0);
       fs7.close(fd, () => {
       });
       return buffer2.subarray(0, bytesRead);
     };
-    var readFile2 = (path4) => new Promise((resolve, reject) => {
-      fs7.open(path4, "r", (err, fd) => {
+    var readFile2 = (path5) => new Promise((resolve, reject) => {
+      fs7.open(path5, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
@@ -19372,11 +19372,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path4) => {
-      if (path4) {
-        if (path4.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path5) => {
+      if (path5) {
+        if (path5.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path4.includes("/ld-linux-")) {
+        } else if (path5.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -19423,8 +19423,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = await readFile2(SELF_PATH);
-        const path4 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
+        const path5 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path5);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -19436,8 +19436,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path4 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
+        const path5 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path5);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -24981,15 +24981,15 @@ var require_color = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path4 = [graph[toModel].parent, toModel];
+      const path5 = [graph[toModel].parent, toModel];
       let fn2 = conversions_default[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path4.unshift(graph[cur].parent);
+        path5.unshift(graph[cur].parent);
         fn2 = link(conversions_default[graph[cur].parent][cur], fn2);
         cur = graph[cur].parent;
       }
-      fn2.conversion = path4;
+      fn2.conversion = path5;
       return fn2;
     }
     function route(fromModel) {
@@ -37441,11 +37441,11 @@ function linkParents(element) {
   return element;
 }
 function getElementPath(element) {
-  let path4 = "";
+  let path5 = "";
   if (element.parent && element.parent.name !== "dtd") {
-    path4 += `${getElementPath(element.parent)}/`;
+    path5 += `${getElementPath(element.parent)}/`;
   }
-  return path4 + element.name;
+  return path5 + element.name;
 }
 var import_debug14, debug14, EbmlContentError, ParseAction, EbmlIterator;
 var init_EbmlIterator = __esm({
@@ -40968,8 +40968,8 @@ var require_req = __commonJS({
       if (req.originalUrl) {
         _req.url = req.originalUrl;
       } else {
-        const path4 = req.path;
-        _req.url = typeof path4 === "string" ? path4 : req.url ? req.url.path || req.url : void 0;
+        const path5 = req.path;
+        _req.url = typeof path5 === "string" ? path5 : req.url ? req.url.path || req.url : void 0;
       }
       if (req.query) {
         _req.query = req.query;
@@ -41134,14 +41134,14 @@ var require_redact = __commonJS({
       }
       return obj;
     }
-    function parsePath(path4) {
+    function parsePath(path5) {
       const parts = [];
       let current = "";
       let inBrackets = false;
       let inQuotes = false;
       let quoteChar = "";
-      for (let i = 0; i < path4.length; i++) {
-        const char = path4[i];
+      for (let i = 0; i < path5.length; i++) {
+        const char = path5[i];
         if (!inBrackets && char === ".") {
           if (current) {
             parts.push(current);
@@ -41272,10 +41272,10 @@ var require_redact = __commonJS({
       return current;
     }
     function redactPaths(obj, paths, censor, remove = false) {
-      for (const path4 of paths) {
-        const parts = parsePath(path4);
+      for (const path5 of paths) {
+        const parts = parsePath(path5);
         if (parts.includes("*")) {
-          redactWildcardPath(obj, parts, censor, path4, remove);
+          redactWildcardPath(obj, parts, censor, path5, remove);
         } else {
           if (remove) {
             removeKey(obj, parts);
@@ -41360,8 +41360,8 @@ var require_redact = __commonJS({
           }
         } else {
           if (afterWildcard.includes("*")) {
-            const wrappedCensor = typeof censor === "function" ? (value, path4) => {
-              const fullPath = [...pathArray.slice(0, pathLength), ...path4];
+            const wrappedCensor = typeof censor === "function" ? (value, path5) => {
+              const fullPath = [...pathArray.slice(0, pathLength), ...path5];
               return censor(value, fullPath);
             } : censor;
             redactWildcardPath(current, afterWildcard, wrappedCensor, originalPath, remove);
@@ -41396,8 +41396,8 @@ var require_redact = __commonJS({
         return null;
       }
       const pathStructure = /* @__PURE__ */ new Map();
-      for (const path4 of pathsToClone) {
-        const parts = parsePath(path4);
+      for (const path5 of pathsToClone) {
+        const parts = parsePath(path5);
         let current = pathStructure;
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i];
@@ -41449,24 +41449,24 @@ var require_redact = __commonJS({
       }
       return cloneSelectively(obj, pathStructure);
     }
-    function validatePath(path4) {
-      if (typeof path4 !== "string") {
+    function validatePath(path5) {
+      if (typeof path5 !== "string") {
         throw new Error("Paths must be (non-empty) strings");
       }
-      if (path4 === "") {
+      if (path5 === "") {
         throw new Error("Invalid redaction path ()");
       }
-      if (path4.includes("..")) {
-        throw new Error(`Invalid redaction path (${path4})`);
+      if (path5.includes("..")) {
+        throw new Error(`Invalid redaction path (${path5})`);
       }
-      if (path4.includes(",")) {
-        throw new Error(`Invalid redaction path (${path4})`);
+      if (path5.includes(",")) {
+        throw new Error(`Invalid redaction path (${path5})`);
       }
       let bracketCount = 0;
       let inQuotes = false;
       let quoteChar = "";
-      for (let i = 0; i < path4.length; i++) {
-        const char = path4[i];
+      for (let i = 0; i < path5.length; i++) {
+        const char = path5[i];
         if ((char === '"' || char === "'") && bracketCount > 0) {
           if (!inQuotes) {
             inQuotes = true;
@@ -41480,20 +41480,20 @@ var require_redact = __commonJS({
         } else if (char === "]" && !inQuotes) {
           bracketCount--;
           if (bracketCount < 0) {
-            throw new Error(`Invalid redaction path (${path4})`);
+            throw new Error(`Invalid redaction path (${path5})`);
           }
         }
       }
       if (bracketCount !== 0) {
-        throw new Error(`Invalid redaction path (${path4})`);
+        throw new Error(`Invalid redaction path (${path5})`);
       }
     }
     function validatePaths(paths) {
       if (!Array.isArray(paths)) {
         throw new TypeError("paths must be an array");
       }
-      for (const path4 of paths) {
-        validatePath(path4);
+      for (const path5 of paths) {
+        validatePath(path5);
       }
     }
     function slowRedact(options = {}) {
@@ -41661,8 +41661,8 @@ var require_redaction = __commonJS({
         if (shape[k] === null) {
           o2[k] = (value) => topCensor(value, [k]);
         } else {
-          const wrappedCensor = typeof censor === "function" ? (value, path4) => {
-            return censor(value, [k, ...path4]);
+          const wrappedCensor = typeof censor === "function" ? (value, path5) => {
+            return censor(value, [k, ...path5]);
           } : censor;
           o2[k] = Redact({
             paths: shape[k],
@@ -41883,7 +41883,7 @@ var require_sonic_boom = __commonJS({
     var fs7 = require("fs");
     var EventEmitter4 = require("events");
     var inherits2 = require("util").inherits;
-    var path4 = require("path");
+    var path5 = require("path");
     var sleep = require_atomic_sleep();
     var assert = require("assert");
     var BUSY_WRITE_TIMEOUT = 100;
@@ -41937,7 +41937,7 @@ var require_sonic_boom = __commonJS({
       const mode = sonic.mode;
       if (sonic.sync) {
         try {
-          if (sonic.mkdir) fs7.mkdirSync(path4.dirname(file), { recursive: true });
+          if (sonic.mkdir) fs7.mkdirSync(path5.dirname(file), { recursive: true });
           const fd = fs7.openSync(file, flags, mode);
           fileOpened(null, fd);
         } catch (err) {
@@ -41945,7 +41945,7 @@ var require_sonic_boom = __commonJS({
           throw err;
         }
       } else if (sonic.mkdir) {
-        fs7.mkdir(path4.dirname(file), { recursive: true }, (err) => {
+        fs7.mkdir(path5.dirname(file), { recursive: true }, (err) => {
           if (err) return fileOpened(err);
           fs7.open(file, flags, mode, fileOpened);
         });
@@ -149960,9 +149960,9 @@ function isVisitable(thing) {
 function removeBrackets(key) {
   return utils_default.endsWith(key, "[]") ? key.slice(0, -2) : key;
 }
-function renderKey(path4, key, dots) {
-  if (!path4) return key;
-  return path4.concat(key).map(function each(token, i) {
+function renderKey(path5, key, dots) {
+  if (!path5) return key;
+  return path5.concat(key).map(function each(token, i) {
     token = removeBrackets(token);
     return !dots && i ? "[" + token + "]" : token;
   }).join(dots ? "." : "");
@@ -150043,13 +150043,13 @@ function toFormData(obj, formData, options) {
       return currentValue;
     });
   }
-  function defaultVisitor(value, key, path4) {
+  function defaultVisitor(value, key, path5) {
     let arr = value;
     if (utils_default.isReactNative(formData) && utils_default.isReactNativeBlob(value)) {
-      formData.append(renderKey(path4, key, dots), convertValue(value));
+      formData.append(renderKey(path5, key, dots), convertValue(value));
       return false;
     }
-    if (value && !path4 && typeof value === "object") {
+    if (value && !path5 && typeof value === "object") {
       if (utils_default.endsWith(key, "{}")) {
         key = metaTokens ? key : key.slice(0, -2);
         value = stringifyWithDepthLimit(value, 1);
@@ -150068,7 +150068,7 @@ function toFormData(obj, formData, options) {
     if (isVisitable(value)) {
       return true;
     }
-    formData.append(renderKey(path4, key, dots), convertValue(value));
+    formData.append(renderKey(path5, key, dots), convertValue(value));
     return false;
   }
   const exposedHelpers = Object.assign(predicates, {
@@ -150076,17 +150076,17 @@ function toFormData(obj, formData, options) {
     convertValue,
     isVisitable
   });
-  function build(value, path4, depth = 0) {
+  function build(value, path5, depth = 0) {
     if (utils_default.isUndefined(value)) return;
     throwIfMaxDepthExceeded(depth);
     if (stack.indexOf(value) !== -1) {
-      throw new Error("Circular reference detected in " + path4.join("."));
+      throw new Error("Circular reference detected in " + path5.join("."));
     }
     stack.push(value);
     utils_default.forEach(value, function each(el, key) {
-      const result = !(utils_default.isUndefined(el) || el === null) && visitor.call(formData, el, utils_default.isString(key) ? key.trim() : key, path4, exposedHelpers);
+      const result = !(utils_default.isUndefined(el) || el === null) && visitor.call(formData, el, utils_default.isString(key) ? key.trim() : key, path5, exposedHelpers);
       if (result === true) {
-        build(el, path4 ? path4.concat(key) : [key], depth + 1);
+        build(el, path5 ? path5.concat(key) : [key], depth + 1);
       }
     });
     stack.pop();
@@ -150371,7 +150371,7 @@ var platform_default = {
 // node_modules/axios/lib/helpers/toURLEncodedForm.js
 function toURLEncodedForm(data, options) {
   return toFormData_default(data, new platform_default.classes.URLSearchParams(), {
-    visitor: function(value, key, path4, helpers) {
+    visitor: function(value, key, path5, helpers) {
       if (platform_default.isNode && utils_default.isBuffer(value)) {
         this.append(key, value.toString("base64"));
         return false;
@@ -150393,14 +150393,14 @@ function throwIfDepthExceeded(index) {
   }
 }
 function parsePropPath(name) {
-  const path4 = [];
+  const path5 = [];
   const pattern = /[^.[\]]+|\[([^.[\]]*)]/g;
   let match;
   while ((match = pattern.exec(name)) !== null) {
-    throwIfDepthExceeded(path4.length);
-    path4.push(match[0] === "[]" ? "" : match[1] || match[0]);
+    throwIfDepthExceeded(path5.length);
+    path5.push(match[0] === "[]" ? "" : match[1] || match[0]);
   }
-  return path4;
+  return path5;
 }
 function arrayToObject(arr) {
   const obj = {};
@@ -150415,12 +150415,12 @@ function arrayToObject(arr) {
   return obj;
 }
 function formDataToJSON(formData) {
-  function buildPath(path4, value, target, index) {
+  function buildPath(path5, value, target, index) {
     throwIfDepthExceeded(index);
-    let name = path4[index++];
+    let name = path5[index++];
     if (name === "__proto__") return true;
     const isNumericKey = Number.isFinite(+name);
-    const isLast = index >= path4.length;
+    const isLast = index >= path5.length;
     name = !name && utils_default.isArray(target) ? target.length : name;
     if (isLast) {
       if (utils_default.hasOwnProp(target, name)) {
@@ -150433,7 +150433,7 @@ function formDataToJSON(formData) {
     if (!utils_default.hasOwnProp(target, name) || !utils_default.isObject(target[name])) {
       target[name] = [];
     }
-    const result = buildPath(path4, value, target[name], index);
+    const result = buildPath(path5, value, target[name], index);
     if (result && utils_default.isArray(target[name])) {
       target[name] = arrayToObject(target[name]);
     }
@@ -152337,9 +152337,9 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       auth = urlUsername + ":" + urlPassword;
     }
     auth && headers.delete("authorization");
-    let path4;
+    let path5;
     try {
-      path4 = buildURL(
+      path5 = buildURL(
         parsed.pathname + parsed.search,
         own2("params"),
         own2("paramsSerializer")
@@ -152361,7 +152361,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       http2Options = Object.assign(/* @__PURE__ */ Object.create(null), http2Options, { lookup });
     }
     const options = Object.assign(/* @__PURE__ */ Object.create(null), {
-      path: path4,
+      path: path5,
       method,
       headers: toByteStringHeaderObject(headers),
       agents: { http: httpAgent, https: httpsAgent },
@@ -152777,14 +152777,14 @@ var isURLSameOrigin_default = platform_default.hasStandardBrowserEnv ? /* @__PUR
 var cookies_default = platform_default.hasStandardBrowserEnv ? (
   // Standard browser envs support document.cookie
   {
-    write(name, value, expires, path4, domain, secure, sameSite) {
+    write(name, value, expires, path5, domain, secure, sameSite) {
       if (typeof document === "undefined") return;
       const cookie = [`${name}=${encodeURIComponent(value)}`];
       if (utils_default.isNumber(expires)) {
         cookie.push(`expires=${new Date(expires).toUTCString()}`);
       }
-      if (utils_default.isString(path4)) {
-        cookie.push(`path=${path4}`);
+      if (utils_default.isString(path5)) {
+        cookie.push(`path=${path5}`);
       }
       if (utils_default.isString(domain)) {
         cookie.push(`domain=${domain}`);
@@ -157004,8 +157004,8 @@ async function getMediaKeys(buffer2, mediaType) {
     macKey: expandedMediaKey.slice(48, 80)
   };
 }
-var extractVideoThumb = async (path4, destPath, time, size) => new Promise((resolve, reject) => {
-  const cmd = `ffmpeg -ss ${time} -i ${path4} -y -vf scale=${size.width}:-1 -vframes 1 -f image2 ${destPath}`;
+var extractVideoThumb = async (path5, destPath, time, size) => new Promise((resolve, reject) => {
+  const cmd = `ffmpeg -ss ${time} -i ${path5} -y -vf scale=${size.width}:-1 -vframes 1 -f image2 ${destPath}`;
   (0, import_child_process.exec)(cmd, (err) => {
     if (err) {
       reject(err);
@@ -162982,11 +162982,11 @@ var Mutex = class {
 var import_promises3 = require("fs/promises");
 var import_path3 = require("path");
 var fileLocks = /* @__PURE__ */ new Map();
-var getFileLock = (path4) => {
-  let mutex = fileLocks.get(path4);
+var getFileLock = (path5) => {
+  let mutex = fileLocks.get(path5);
   if (!mutex) {
     mutex = new Mutex();
-    fileLocks.set(path4, mutex);
+    fileLocks.set(path5, mutex);
   }
   return mutex;
 };
@@ -170483,6 +170483,67 @@ var msgRetryCounterCache = {
   delete: (key) => msgRetryCounterMap.delete(key)
 };
 
+// media-downloader.js
+async function downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock2 = null, msg = null) {
+  if (!mediaObj) return null;
+  if (typeof downloadContentFromMessage === "function") {
+    try {
+      const stream5 = await downloadContentFromMessage(mediaObj, mediaTypeLower);
+      const chunks = [];
+      for await (const chunk2 of stream5) {
+        chunks.push(chunk2);
+      }
+      const buffer2 = Buffer.concat(chunks);
+      if (buffer2 && buffer2.length > 0) {
+        return buffer2;
+      }
+    } catch (eStream) {
+      logger.warn(`[MEDIA_DOWNLOADER] Primary stream download (${mediaTypeLower}) failed: ${eStream.message}`);
+    }
+  }
+  if (sock2 && typeof downloadMediaMessage === "function") {
+    try {
+      const syntheticMsg = {
+        key: msg?.key || { id: mediaObj.fileSha256 ? Buffer.from(mediaObj.fileSha256).toString("hex") : "media" },
+        message: { [`${mediaTypeLower}Message`]: mediaObj }
+      };
+      const buffer2 = await downloadMediaMessage(syntheticMsg, "buffer", {}, {
+        logger,
+        reuploadRequest: sock2?.updateMediaMessage ? sock2.updateMediaMessage.bind(sock2) : void 0
+      });
+      if (buffer2 && buffer2.length > 0) {
+        return buffer2;
+      }
+    } catch (eBaileys) {
+      logger.warn(`[MEDIA_DOWNLOADER] Secondary downloadMediaMessage failed: ${eBaileys.message}`);
+    }
+    if (msg && msg.message) {
+      try {
+        const buffer2 = await downloadMediaMessage(msg, "buffer", {}, {
+          logger,
+          reuploadRequest: sock2?.updateMediaMessage ? sock2.updateMediaMessage.bind(sock2) : void 0
+        });
+        if (buffer2 && buffer2.length > 0) {
+          return buffer2;
+        }
+      } catch (_) {
+      }
+    }
+  }
+  if (mediaTypeLower === "image" && mediaObj.jpegThumbnail) {
+    try {
+      const thumbBuffer = Buffer.isBuffer(mediaObj.jpegThumbnail) ? mediaObj.jpegThumbnail : mediaObj.jpegThumbnail.data ? Buffer.from(mediaObj.jpegThumbnail.data) : Buffer.from(mediaObj.jpegThumbnail);
+      if (thumbBuffer && thumbBuffer.length > 50) {
+        logger.warn(`[MEDIA_DOWNLOADER] Using embedded jpegThumbnail fallback (${thumbBuffer.length} bytes)`);
+        return thumbBuffer;
+      }
+    } catch (eThumb) {
+      logger.warn(`[MEDIA_DOWNLOADER] Thumbnail fallback failed: ${eThumb.message}`);
+    }
+  }
+  return null;
+}
+
 // bridge.js
 var import_net = __toESM(require("net"), 1);
 var import_readline = __toESM(require("readline"), 1);
@@ -170652,22 +170713,6 @@ async function resolvePhoneAndLid(jidOrPhone, msg = null, sock2 = null) {
       }
     } catch (_) {
     }
-    try {
-      if (sock2?.onWhatsApp) {
-        const results = await sock2.onWhatsApp(`${cleanDigits}@lid`);
-        if (Array.isArray(results) && results.length > 0 && results[0]?.jid) {
-          const resultJid = String(results[0].jid);
-          if (resultJid.includes("@s.whatsapp.net")) {
-            const cleanPn = resultJid.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
-            if (cleanPn && cleanPn.length >= 7 && cleanPn.length <= 15) {
-              linkLidAndPhone(cleanDigits, cleanPn);
-              return { phone: cleanPn, realPhone: cleanPn, lid: cleanDigits, isLid: true };
-            }
-          }
-        }
-      }
-    } catch (_) {
-    }
     return { phone: cleanDigits, realPhone: null, lid: cleanDigits, isLid: true };
   } else {
     const mappedLid = phoneLidMap.get(cleanDigits) || null;
@@ -170694,6 +170739,7 @@ function getLidForPhone(phone) {
 
 // status-manager.js
 var import_fs5 = __toESM(require("fs"), 1);
+var import_path6 = __toESM(require("path"), 1);
 
 // tracer.js
 var activeTraces = /* @__PURE__ */ new Map();
@@ -170922,7 +170968,8 @@ async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH_FOLDER
     id: statusId,
     participant: msg.key.participant || senderJid,
     fromMe: msg.key.fromMe || false,
-    pushName: msg.pushName || ""
+    pushName: msg.pushName || "",
+    rawMessage: msg.message
   });
   if (statusKeysMap.size > CONFIG.MAX_STATUS_KEYS) {
     const firstKey = statusKeysMap.keys().next().value;
@@ -170941,6 +170988,32 @@ async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH_FOLDER
   const ageHours = (Date.now() - ts) / (1e3 * 60 * 60);
   if (ageHours > CONFIG.STATUS_MAX_AGE_HOURS) return;
   const senderName = msg.pushName || getContactName(resolvedPhone) || getContactName(cleanRawPhone) || "";
+  let mediaUrl = null;
+  if (mediaType !== "TEXT") {
+    const mediaObj = msg.message.imageMessage || msg.message.videoMessage;
+    const mediaTypeLower = mediaType === "IMAGE" ? "image" : "video";
+    const ext = mediaType === "VIDEO" ? "mp4" : "jpg";
+    const statusMediaDir = import_path6.default.join(authFolder, "..", "statuses_media");
+    try {
+      if (!import_fs5.default.existsSync(statusMediaDir)) import_fs5.default.mkdirSync(statusMediaDir, { recursive: true });
+    } catch (_) {
+    }
+    const localFilePath = import_path6.default.join(statusMediaDir, `status_${statusId}.${ext}`);
+    if (import_fs5.default.existsSync(localFilePath) && import_fs5.default.statSync(localFilePath).size > 0) {
+      mediaUrl = localFilePath;
+    } else if (mediaObj) {
+      try {
+        const buffer2 = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock2, msg);
+        if (buffer2 && buffer2.length > 0) {
+          import_fs5.default.writeFileSync(localFilePath, buffer2);
+          mediaUrl = localFilePath;
+          console.log(`[STATUS] Successfully downloaded media for status ${statusId}: ${localFilePath} (${buffer2.length} bytes)`);
+        }
+      } catch (err) {
+        console.warn(`[STATUS] Failed to download status media for ${statusId}: ${err.message}`);
+      }
+    }
+  }
   emitToAndroid("INCOMING_STATUS", {
     id: statusId,
     senderPhone: resolvedPhone,
@@ -170950,9 +171023,46 @@ async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH_FOLDER
     isLid: resolved.isLid,
     mediaType,
     textContent: text,
+    mediaUrl,
     timestamp: ts,
     participant: msg.key.participant || senderJid
   });
+}
+async function downloadStatusMedia(sock2, statusId, authFolder = CONFIG.DEFAULT_AUTH_FOLDER) {
+  if (!statusId) return null;
+  let cachedMsg = rawMessagesCache.get(statusId);
+  let storedEntry = statusKeysMap.get(statusId);
+  if (!cachedMsg && storedEntry?.rawMessage) {
+    cachedMsg = storedEntry.rawMessage;
+  }
+  const mediaObj = cachedMsg?.imageMessage || cachedMsg?.videoMessage;
+  const mediaTypeLower = cachedMsg?.imageMessage ? "image" : cachedMsg?.videoMessage ? "video" : null;
+  if (!mediaObj || !mediaTypeLower) return null;
+  const ext = mediaTypeLower === "video" ? "mp4" : "jpg";
+  const statusMediaDir = import_path6.default.join(authFolder, "..", "statuses_media");
+  try {
+    if (!import_fs5.default.existsSync(statusMediaDir)) import_fs5.default.mkdirSync(statusMediaDir, { recursive: true });
+  } catch (_) {
+  }
+  const localFilePath = import_path6.default.join(statusMediaDir, `status_${statusId}.${ext}`);
+  if (import_fs5.default.existsSync(localFilePath) && import_fs5.default.statSync(localFilePath).size > 0) {
+    return localFilePath;
+  }
+  try {
+    const syntheticMsg = {
+      key: { id: statusId, remoteJid: "status@broadcast", participant: storedEntry?.participant },
+      message: cachedMsg
+    };
+    const buffer2 = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock2, syntheticMsg);
+    if (buffer2 && buffer2.length > 0) {
+      import_fs5.default.writeFileSync(localFilePath, buffer2);
+      console.log(`[STATUS] On-demand downloaded media for status ${statusId}: ${localFilePath} (${buffer2.length} bytes)`);
+      return localFilePath;
+    }
+  } catch (err) {
+    console.warn(`[STATUS] downloadStatusMedia failed for ${statusId}: ${err.message}`);
+  }
+  return null;
 }
 async function viewStatus(sock2, statusId, senderPhone = "", participantInput = "", authFolder = CONFIG.DEFAULT_AUTH_FOLDER, options = {}) {
   if (!sock2 || !statusId) return;
@@ -171053,9 +171163,11 @@ async function reactStatus(sock2, statusId, emoji = "\u{1F49A}", senderPhone = "
     } catch (receiptErr) {
       console.error(`[reactStatus] sendReceipt failed: ${receiptErr?.message || receiptErr}`);
     }
-    try {
-      await sock2.readMessages([reactionKey]);
-    } catch (_) {
+    if (options && options.syncReadToSelf === true) {
+      try {
+        await sock2.readMessages([reactionKey]);
+      } catch (_) {
+      }
     }
     recordStage(statusId, "REACTION_BUILD", "status-manager.js", "reactStatus", {
       statusId,
@@ -171128,6 +171240,24 @@ function getStatusKeysCount() {
 }
 
 // command-dispatcher.js
+function formatPairingErrorMessage(pairErr) {
+  if (!pairErr) return "\u0641\u0634\u0644 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641 \u0623\u062B\u0646\u0627\u0621 \u0637\u0644\u0628 \u0643\u0648\u062F \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646 \u0645\u0646 \u062E\u0648\u0627\u062F\u0645 \u0648\u0627\u062A\u0633\u0627\u0628";
+  const statusCode = pairErr.output?.statusCode || pairErr.status;
+  const msg = String(pairErr.message || pairErr).toLowerCase();
+  if (statusCode === 429 || msg.includes("rate-overlimit") || msg.includes("rate overlimit") || msg.includes("too many requests")) {
+    return "\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0644\u0637\u0644\u0628 \u0623\u0643\u0648\u0627\u062F \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646 \u0645\u0624\u0642\u062A\u0627\u064B \u0645\u0646 \u0648\u0627\u062A\u0633\u0627\u0628. \u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 15 \u062F\u0642\u064A\u0642\u0629 \u062B\u0645 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629.";
+  }
+  if (statusCode === 401 || statusCode === 403 || msg.includes("not-authorized") || msg.includes("invalid phone")) {
+    return "\u0631\u0641\u0636 \u0648\u0627\u062A\u0633\u0627\u0628 \u0637\u0644\u0628 \u0627\u0644\u0643\u0648\u062F \u0644\u0647\u0630\u0627 \u0627\u0644\u0631\u0642\u0645. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0635\u062D\u0629 \u0627\u0644\u0631\u0642\u0645 \u0648\u0645\u0641\u062A\u0627\u062D \u0627\u0644\u062F\u0648\u0644\u0629 \u0648\u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0641\u062A\u062D \u062A\u0637\u0628\u064A\u0642 \u0648\u0627\u062A\u0633\u0627\u0628.";
+  }
+  if (msg.includes("connection closed") || msg.includes("stream errored") || statusCode === 428 || statusCode === 408) {
+    return "\u0627\u0646\u0642\u0637\u0639 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u062E\u0648\u0627\u062F\u0645 \u0648\u0627\u062A\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0637\u0644\u0628 \u0627\u0644\u0643\u0648\u062F. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629.";
+  }
+  if (msg.includes("bad mac") || msg.includes("precondition")) {
+    return "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062C\u0644\u0633\u0629 \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u063A\u064A\u0631 \u0645\u062A\u0632\u0627\u0645\u0646\u0629. \u064A\u0631\u062C\u0649 \u0625\u0639\u0627\u062F\u0629 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0648\u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B.";
+  }
+  return `\u0641\u0634\u0644 \u0637\u0644\u0628 \u0643\u0648\u062F \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646: ${pairErr.message || pairErr}`;
+}
 function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAuthFolder }) {
   return async function processCommandLine(line) {
     if (!line || typeof line !== "string") return;
@@ -171151,12 +171281,16 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
         case "PAIR_CODE": {
           try {
             if (!command.phone) {
-              emitToAndroid("ERROR", { error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641" });
+              const errMsg = "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0643\u0627\u0645\u0644\u0627\u064B \u0645\u0639 \u0645\u0641\u062A\u0627\u062D \u0627\u0644\u062F\u0648\u0644\u0629";
+              emitToAndroid("ERROR", { error: errMsg });
+              emitToAndroid("PAIRING_ERROR", { error: errMsg });
               break;
             }
             const cleanPhone = String(command.phone).replace(/[^0-9]/g, "");
             if (cleanPhone.length < 7) {
-              emitToAndroid("ERROR", { error: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" });
+              const errMsg = "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0623\u0648 \u0642\u0635\u064A\u0631 \u062C\u062F\u0627\u064B\u060C \u064A\u0631\u062C\u0649 \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0631\u0642\u0645 \u0628\u0627\u0644\u0635\u064A\u063A\u0629 \u0627\u0644\u062F\u0648\u0644\u064A\u0629";
+              emitToAndroid("ERROR", { error: errMsg });
+              emitToAndroid("PAIRING_ERROR", { error: errMsg });
               break;
             }
             let activeSock = getSocket ? getSocket() : null;
@@ -171183,10 +171317,14 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
               const code = await activeSock.requestPairingCode(cleanPhone);
               emitToAndroid("PAIRING_CODE", { code, phone: cleanPhone });
             } else {
-              emitToAndroid("ERROR", { error: "\u0645\u062D\u0631\u0643 \u0648\u0627\u062A\u0633\u0627\u0628 \u063A\u064A\u0631 \u062C\u0627\u0647\u0632 \u062D\u0627\u0644\u064A\u0627\u064B \u0644\u0637\u0644\u0628 \u0627\u0644\u0643\u0648\u062F\u060C \u0623\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F \u0644\u062D\u0638\u0627\u062A" });
+              const errMsg = "\u0645\u062D\u0631\u0643 \u0648\u0627\u062A\u0633\u0627\u0628 \u063A\u064A\u0631 \u062C\u0627\u0647\u0632 \u062D\u0627\u0644\u064A\u0627\u064B \u0644\u0637\u0644\u0628 \u0627\u0644\u0643\u0648\u062F\u060C \u062C\u0627\u0631\u064D \u0625\u0639\u0627\u062F\u0629 \u062A\u0647\u064A\u0626\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644... \u0623\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F \u062B\u0648\u0627\u0646\u064D";
+              emitToAndroid("ERROR", { error: errMsg });
+              emitToAndroid("PAIRING_ERROR", { error: errMsg });
             }
           } catch (pairErr) {
-            emitToAndroid("ERROR", { error: `\u0641\u0634\u0644 \u0637\u0644\u0628 \u0643\u0648\u062F \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646: ${pairErr.message || pairErr}` });
+            const friendlyErr = formatPairingErrorMessage(pairErr);
+            emitToAndroid("ERROR", { error: friendlyErr, raw: pairErr.message || String(pairErr) });
+            emitToAndroid("PAIRING_ERROR", { error: friendlyErr, raw: pairErr.message || String(pairErr) });
           }
           break;
         }
@@ -171319,7 +171457,8 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
             const statusId = command.statusId || command.id;
             const options = {
               ghostMode: false,
-              sendAsChatReply: false
+              sendAsChatReply: false,
+              syncReadToSelf: command.syncReadToSelf === true
             };
             recordStage(statusId, "DISPATCHER", "command-dispatcher.js", "processCommandLine", {
               action: "REACT_STATUS",
@@ -171330,6 +171469,27 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
               options
             });
             await reactStatus(sock2, statusId, command.emoji || "\u{1F49A}", command.senderPhone, command.participant, authFolder, options);
+          }
+          break;
+        }
+        case "DOWNLOAD_STATUS_MEDIA": {
+          const statusId = command.statusId || command.id;
+          if (statusId) {
+            try {
+              const filePath = await downloadStatusMedia(sock2, statusId, authFolder);
+              emitToAndroid("STATUS_MEDIA_DOWNLOADED", {
+                id: statusId,
+                mediaUrl: filePath,
+                success: !!filePath
+              });
+            } catch (err) {
+              emitToAndroid("STATUS_MEDIA_DOWNLOADED", {
+                id: statusId,
+                mediaUrl: null,
+                success: false,
+                error: err.message
+              });
+            }
           }
           break;
         }
@@ -171354,7 +171514,7 @@ function createCommandDispatcher({ getSocket, startSession, getAuthFolder, setAu
 
 // index.js
 var import_fs6 = __toESM(require("fs"), 1);
-var import_path6 = __toESM(require("path"), 1);
+var import_path7 = __toESM(require("path"), 1);
 var sock = null;
 var isStarting = false;
 var currentAuthFolder = process.argv[2] || CONFIG.DEFAULT_AUTH_FOLDER;
@@ -171413,16 +171573,37 @@ async function handleContactsBatch(contactsList, authFolder = currentAuthFolder)
     saveLidPhoneMap(authFolder);
   }
 }
-async function startWhatsAppSession(authFolder = currentAuthFolder) {
-  if (isStarting) return;
-  isStarting = true;
+function terminateExistingSocket() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
   if (sock) {
     try {
-      sock.end();
+      if (sock.ev && typeof sock.ev.removeAllListeners === "function") {
+        sock.ev.removeAllListeners();
+      }
+    } catch (_) {
+    }
+    try {
+      if (sock.ws && typeof sock.ws.close === "function") {
+        sock.ws.close();
+      }
+    } catch (_) {
+    }
+    try {
+      if (typeof sock.end === "function") {
+        sock.end();
+      }
     } catch (_) {
     }
     sock = null;
   }
+}
+async function startWhatsAppSession(authFolder = currentAuthFolder) {
+  if (isStarting) return;
+  isStarting = true;
+  terminateExistingSocket();
   loadStatusKeys(authFolder);
   loadLidPhoneMap(authFolder);
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
@@ -171444,7 +171625,21 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
     }
   });
   attachSocketTraceHook(sock);
-  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", async () => {
+    try {
+      await saveCreds();
+      const credsFile = import_path7.default.join(authFolder, "creds.json");
+      if (import_fs6.default.existsSync(credsFile) && import_fs6.default.statSync(credsFile).size > 50 && sock?.user) {
+        const userPhone = sock.user.id ? String(sock.user.id).replace(/[^0-9]/g, "").substring(0, 15) : "";
+        emitToAndroid("SESSION_PERSISTED", {
+          phone: userPhone,
+          verified: true
+        });
+      }
+    } catch (e) {
+      console.error("[creds.update] Error saving and verifying creds:", e);
+    }
+  });
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
@@ -171471,6 +171666,23 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
           reason: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0631\u0648\u062C \u0645\u0646 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0631\u062A\u0628\u0637\u0629 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0648\u0627\u062A\u0633\u0627\u0628"
         });
       }
+      const isPairingPhase = !sock?.authState?.creds?.registered && !sock?.user;
+      if (isPairingPhase && lastDisconnect?.error) {
+        let pairingReason = "\u0641\u0634\u0644\u062A \u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u0631\u0628\u0637 \u0645\u0639 \u062A\u0637\u0628\u064A\u0642 \u0648\u0627\u062A\u0633\u0627\u0628.";
+        if (statusCode === 401 || statusCode === 403) {
+          pairingReason = "\u062A\u0645 \u0631\u0641\u0636 \u0643\u0648\u062F \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646 \u0623\u0648 \u0625\u0644\u063A\u0627\u0621 \u0631\u0628\u0637 \u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0646 \u062A\u0637\u0628\u064A\u0642 \u0648\u0627\u062A\u0633\u0627\u0628.";
+        } else if (statusCode === 408 || statusCode === 428) {
+          pairingReason = "\u0627\u0646\u062A\u0647\u062A \u0645\u0647\u0644\u0629 \u0631\u0628\u0637 \u0627\u0644\u062C\u0647\u0627\u0632 \u0623\u0648 \u0627\u0646\u0642\u0637\u0639 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u0645\u0639 \u0648\u0627\u062A\u0633\u0627\u0628.";
+        } else if (statusCode === 515) {
+          pairingReason = "\u0645\u0637\u0644\u0648\u0628 \u0625\u0639\u0627\u062F\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0645\u062D\u0631\u0643 \u0644\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646 \u0628\u0646\u062C\u0627\u062D.";
+        } else if (lastDisconnect.error.message) {
+          pairingReason = `\u062A\u0639\u0630\u0631 \u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u0627\u0642\u062A\u0631\u0627\u0646: ${lastDisconnect.error.message}`;
+        }
+        emitToAndroid("PAIRING_FAILED", {
+          reason: pairingReason,
+          statusCode: statusCode || 0
+        });
+      }
       emitToAndroid("CONNECTION_STATE", {
         status: "DISCONNECTED",
         reconnecting: shouldReconnect,
@@ -171484,6 +171696,14 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
       const user = sock.user;
       try {
         await sock.sendPresenceUpdate("available");
+      } catch (_) {
+      }
+      let isCredsVerified = false;
+      try {
+        const credsFile = import_path7.default.join(authFolder, "creds.json");
+        if (import_fs6.default.existsSync(credsFile) && import_fs6.default.statSync(credsFile).size > 50) {
+          isCredsVerified = true;
+        }
       } catch (_) {
       }
       if (heartbeatInterval) clearInterval(heartbeatInterval);
@@ -171502,11 +171722,7 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
               reconnecting: true,
               reason: "\u0627\u0646\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0645\u0642\u0628\u0633 \u0628\u0635\u0645\u062A (Silent Socket Drop)"
             });
-            try {
-              sock.end();
-            } catch (_) {
-            }
-            sock = null;
+            terminateExistingSocket();
             setTimeout(() => startWhatsAppSession(authFolder), 3e3);
           }
         }
@@ -171516,8 +171732,16 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
         user: {
           id: user?.id,
           name: user?.name || user?.notify || ""
-        }
+        },
+        sessionVerified: isCredsVerified
       });
+      if (isCredsVerified && user?.id) {
+        const cleanPhone = String(user.id).replace(/[^0-9]/g, "").substring(0, 15);
+        emitToAndroid("SESSION_PERSISTED", {
+          phone: cleanPhone,
+          verified: true
+        });
+      }
       const count = getStatusKeysCount();
       emitToAndroid("STATUS_FETCH_DONE", {
         count,
@@ -171602,182 +171826,232 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
       }
     }
   });
+  function unwrapAndInspectMessage(rawMsg) {
+    let current = rawMsg;
+    let isViewOnce = false;
+    let depth = 0;
+    while (current && depth < 10) {
+      depth++;
+      if (current.viewOnceMessage?.message) {
+        isViewOnce = true;
+        current = current.viewOnceMessage.message;
+        continue;
+      }
+      if (current.viewOnceMessageV2?.message) {
+        isViewOnce = true;
+        current = current.viewOnceMessageV2.message;
+        continue;
+      }
+      if (current.viewOnceMessageV2Extension?.message) {
+        isViewOnce = true;
+        current = current.viewOnceMessageV2Extension.message;
+        continue;
+      }
+      if (current.ephemeralMessage?.message) {
+        current = current.ephemeralMessage.message;
+        continue;
+      }
+      if (current.documentWithCaptionMessage?.message) {
+        current = current.documentWithCaptionMessage.message;
+        continue;
+      }
+      if (current.deviceSentMessage?.message) {
+        current = current.deviceSentMessage.message;
+        continue;
+      }
+      break;
+    }
+    const extracted = (typeof extractMessageContent === "function" ? extractMessageContent(current) : null) || (typeof normalizeMessageContent === "function" ? normalizeMessageContent(current) : null) || current;
+    if (extracted?.imageMessage?.viewOnce || extracted?.videoMessage?.viewOnce || extracted?.audioMessage?.viewOnce || extracted?.viewOnce || rawMsg?.imageMessage?.viewOnce || rawMsg?.videoMessage?.viewOnce || rawMsg?.audioMessage?.viewOnce) {
+      isViewOnce = true;
+    }
+    return { leaf: extracted, isViewOnce };
+  }
   sock.ev.on("messages.upsert", async ({ messages }) => {
     for (const msg of messages) {
-      if (msg.key?.id && msg.message) {
-        rawMessagesCache.set(msg.key.id, msg.message);
-        if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
-          const firstKey = rawMessagesCache.keys().next().value;
-          rawMessagesCache.delete(firstKey);
+      try {
+        if (msg.key?.id && msg.message) {
+          rawMessagesCache.set(msg.key.id, msg.message);
+          if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
+            const firstKey = rawMessagesCache.keys().next().value;
+            rawMessagesCache.delete(firstKey);
+          }
         }
-      }
-      if (msg.key?.remoteJid === "status@broadcast") {
-        if (msg.key.fromMe || !msg.message) continue;
-        await processStatusMessage(msg, authFolder, sock);
-        continue;
-      }
-      if (!msg.message || msg.key.fromMe) continue;
-      const remoteJid = msg.key.remoteJid || "";
-      if (remoteJid.endsWith("@newsletter") || remoteJid.includes("@broadcast")) continue;
-      const isGroup = remoteJid.endsWith("@g.us");
-      const actualSender = isGroup ? msg.key.participant || "" : remoteJid;
-      if (actualSender.startsWith("120363")) continue;
-      if (msg.key?.senderPn) {
-        linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
-      }
-      if (msg.key?.participantPn) {
-        linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
-      }
-      const resolved = await resolvePhoneAndLid(actualSender, msg, sock);
-      const cleanPhone = resolved.realPhone || resolved.phone;
-      if (!cleanPhone || cleanPhone.startsWith("120363")) continue;
-      if (msg.pushName && cleanPhone) {
-        const trimmedPush = msg.pushName.trim();
-        setContactName(cleanPhone, trimmedPush);
-        if (resolved.lid) {
-          setContactName(resolved.lid, trimmedPush);
+        if (msg.key?.remoteJid === "status@broadcast") {
+          if (msg.key.fromMe || !msg.message) continue;
+          await processStatusMessage(msg, authFolder, sock);
+          continue;
         }
-      }
-      let rootMsg = msg.message;
-      if (rootMsg?.ephemeralMessage?.message) {
-        rootMsg = rootMsg.ephemeralMessage.message;
-      }
-      const viewOnceObj = rootMsg?.viewOnceMessage?.message || rootMsg?.viewOnceMessageV2?.message || rootMsg?.viewOnceMessageV2Extension?.message;
-      const isViewOnce = !!viewOnceObj;
-      const targetMediaMsg = viewOnceObj || rootMsg;
-      const isImage = !!targetMediaMsg?.imageMessage;
-      const isVideo = !!targetMediaMsg?.videoMessage;
-      const isAudio = !!targetMediaMsg?.audioMessage;
-      const isDoc = !!targetMediaMsg?.documentMessage;
-      const hasMedia = isImage || isVideo || isAudio || isDoc;
-      const mediaType = isImage ? "IMAGE" : isVideo ? "VIDEO" : isAudio ? "AUDIO" : isDoc ? "DOCUMENT" : "IMAGE";
-      const mediaTypeLower = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : isDoc ? "document" : "image";
-      const mediaObj = targetMediaMsg?.imageMessage || targetMediaMsg?.videoMessage || targetMediaMsg?.audioMessage || targetMediaMsg?.documentMessage;
-      const mime = mediaObj?.mimetype || (isImage ? "image/jpeg" : isVideo ? "video/mp4" : isAudio ? "audio/ogg" : "application/octet-stream");
-      const ext = isImage ? "jpg" : isVideo ? "mp4" : isAudio ? "ogg" : "bin";
-      if (hasMedia && mediaObj) {
-        const vaultDir = import_path6.default.join(authFolder, "..", "vault_media");
-        try {
-          if (!import_fs6.default.existsSync(vaultDir)) import_fs6.default.mkdirSync(vaultDir, { recursive: true });
-        } catch (eDir) {
-          console.error("[VAULT] Failed to create vault directory:", eDir);
-        }
-        const fileNamePrefix = isViewOnce ? "viewonce" : "media";
-        const filePath = import_path6.default.join(vaultDir, `${fileNamePrefix}_${msg.key.id}.${ext}`);
-        (async () => {
-          let buffer2 = null;
-          try {
-            if ((mediaObj.url || mediaObj.directPath) && mediaObj.mediaKey) {
-              const stream5 = await downloadContentFromMessage(mediaObj, mediaTypeLower);
-              const chunks = [];
-              for await (const chunk2 of stream5) {
-                chunks.push(chunk2);
-              }
-              buffer2 = Buffer.concat(chunks);
-            }
-          } catch (e1) {
-            logger.warn(`[VAULT] downloadContentFromMessage (${mediaTypeLower}) failed: ${e1.message}`);
-          }
-          const downloadOptions = {
-            logger,
-            reuploadRequest: sock?.updateMediaMessage ? sock.updateMediaMessage.bind(sock) : void 0
-          };
-          if (!buffer2 || buffer2.length === 0) {
-            try {
-              buffer2 = await downloadMediaMessage(msg, "buffer", {}, downloadOptions);
-            } catch (e2) {
-              logger.warn(`[VAULT] downloadMediaMessage original msg failed: ${e2.message}`);
-            }
-          }
-          if (!buffer2 || buffer2.length === 0) {
-            try {
-              const syntheticMsg = {
-                key: msg.key,
-                message: { [`${mediaTypeLower}Message`]: mediaObj }
-              };
-              buffer2 = await downloadMediaMessage(syntheticMsg, "buffer", {}, downloadOptions);
-            } catch (e3) {
-              logger.warn(`[VAULT] downloadMediaMessage synthetic failed: ${e3.message}`);
-            }
-          }
-          if (buffer2 && buffer2.length > 0) {
-            try {
-              import_fs6.default.writeFileSync(filePath, buffer2);
-              console.log(`[VAULT] Media captured successfully: ${filePath} (${buffer2.length} bytes, viewOnce=${isViewOnce})`);
-              rawMessagesCache.set(`media_file_${msg.key.id}`, {
-                localFilePath: filePath,
-                mimeType: mime,
-                fileSizeBytes: buffer2.length,
-                mediaType,
-                originalText: mediaObj?.caption || ""
-              });
-              emitToAndroid("VAULT_MEDIA_CAPTURED", {
-                id: msg.key.id,
-                senderPhone: cleanPhone,
-                senderName: msg.pushName || getContactName(cleanPhone) || "",
-                mediaType,
-                isViewOnce,
-                originalText: mediaObj?.caption || "",
-                localFilePath: filePath,
-                mimeType: mime,
-                fileSizeBytes: buffer2.length,
-                timestamp: Date.now()
-              });
-            } catch (writeErr) {
-              console.error("[VAULT] Failed to write vault media file:", writeErr);
-            }
-          } else {
-            console.warn("[VAULT] Failed to download media buffer for:", msg.key.id);
-          }
-        })().catch((topErr) => {
-          console.error("[VAULT] Unhandled error in media capture:", topErr);
+        if (!msg.message) continue;
+        const remoteJid = msg.key?.remoteJid || "";
+        if (remoteJid.endsWith("@newsletter") || remoteJid.includes("@broadcast")) continue;
+        const isGroup = remoteJid.endsWith("@g.us");
+        const actualSender = isGroup ? msg.key.participant || "" : remoteJid;
+        const cleanRawDigits = actualSender.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+        const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
+        if (msg.key?.fromMe && !isViewOnce) continue;
+        const contentType = typeof getContentType === "function" ? getContentType(leaf) : null;
+        emitToAndroid("VAULT_PROGRESS", {
+          status: "MSG_INGEST",
+          id: msg.key?.id || "",
+          senderPhone: cleanRawDigits || actualSender,
+          message: `\u{1F4E9} \u0631\u0633\u0627\u0644\u0629 \u0648\u0627\u0631\u062F\u0629 [${msg.key?.id ? msg.key.id.slice(-6) : "N/A"}] \u0645\u0646 (${cleanRawDigits || actualSender}) | \u0646\u0648\u0639: ${contentType || "media"}${isViewOnce ? " \u{1F512} [\u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : ""}`
         });
-      }
-      const protocolMsg = msg.message?.protocolMessage;
-      if (protocolMsg && protocolMsg.type === 0 && protocolMsg.key?.id) {
-        const revokedId = protocolMsg.key.id;
-        const cachedMedia = rawMessagesCache.get(`media_file_${revokedId}`);
-        if (cachedMedia) {
-          emitToAndroid("VAULT_MEDIA_CAPTURED", {
-            id: revokedId,
-            senderPhone: cleanPhone || actualSender,
-            senderName: msg.pushName || getContactName(cleanPhone) || "",
-            mediaType: cachedMedia.mediaType,
-            isViewOnce: false,
-            originalText: cachedMedia.originalText,
-            localFilePath: cachedMedia.localFilePath,
-            mimeType: cachedMedia.mimeType,
-            fileSizeBytes: cachedMedia.fileSizeBytes,
-            timestamp: Date.now()
+        const mediaObj = leaf?.imageMessage || leaf?.videoMessage || leaf?.audioMessage || leaf?.documentMessage;
+        const isImage = !!(leaf?.imageMessage || contentType === "imageMessage");
+        const isVideo = !!(leaf?.videoMessage || contentType === "videoMessage");
+        const isAudio = !!(leaf?.audioMessage || contentType === "audioMessage");
+        const isDoc = !!(leaf?.documentMessage || contentType === "documentMessage");
+        const hasMedia = !!mediaObj || isImage || isVideo || isAudio || isDoc;
+        const mediaType = isImage ? "IMAGE" : isVideo ? "VIDEO" : isAudio ? "AUDIO" : isDoc ? "DOCUMENT" : "NONE";
+        const mediaTypeLower = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : isDoc ? "document" : "image";
+        const ext = isImage ? "jpg" : isVideo ? "mp4" : isAudio ? "ogg" : "bin";
+        const mime = mediaObj?.mimetype || (isImage ? "image/jpeg" : isVideo ? "video/mp4" : isAudio ? "audio/ogg" : "application/octet-stream");
+        if (hasMedia && mediaObj && isViewOnce) {
+          const vaultDir = import_path7.default.join(authFolder, "..", "vault_media");
+          try {
+            if (!import_fs6.default.existsSync(vaultDir)) import_fs6.default.mkdirSync(vaultDir, { recursive: true });
+          } catch (eDir) {
+            console.error("[VAULT] Failed to create vault directory:", eDir);
+          }
+          const filePath = import_path7.default.join(vaultDir, `viewonce_${msg.key.id}.${ext}`);
+          emitToAndroid("VAULT_PROGRESS", {
+            status: "DETECTED",
+            id: msg.key.id,
+            senderPhone: cleanRawDigits || actualSender,
+            mediaType,
+            message: `\u{1F512} \u062A\u0645 \u0631\u0635\u062F ${mediaType === "IMAGE" ? "\u0635\u0648\u0631\u0629" : "\u0648\u0633\u0627\u0626\u0637"} \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0645\u0646 ${cleanRawDigits || actualSender}\u060C \u062C\u0627\u0631\u064A \u0641\u0643 \u0627\u0644\u062A\u0634\u0641\u064A\u0631 \u0648\u0627\u0644\u062A\u0646\u0632\u064A\u0644...`
+          });
+          (async () => {
+            let buffer2 = null;
+            try {
+              buffer2 = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock, msg);
+            } catch (e1) {
+              console.error(`[VAULT] downloadAndDecryptMedia (${mediaTypeLower}) error:`, e1.message);
+            }
+            if (buffer2 && buffer2.length > 0) {
+              try {
+                import_fs6.default.writeFileSync(filePath, buffer2);
+                console.log(`[VAULT] View-Once captured successfully: ${filePath} (${buffer2.length} bytes, type=${mediaType})`);
+                rawMessagesCache.set(`media_file_${msg.key.id}`, {
+                  localFilePath: filePath,
+                  mimeType: mime,
+                  fileSizeBytes: buffer2.length,
+                  mediaType,
+                  originalText: mediaObj?.caption || ""
+                });
+                const senderDisplay = msg.pushName || getContactName(cleanRawDigits) || cleanRawDigits || actualSender;
+                emitToAndroid("VAULT_MEDIA_CAPTURED", {
+                  id: msg.key.id,
+                  senderPhone: cleanRawDigits || actualSender,
+                  senderName: senderDisplay,
+                  mediaType,
+                  isViewOnce: true,
+                  originalText: mediaObj?.caption || "",
+                  localFilePath: filePath,
+                  mimeType: mime,
+                  fileSizeBytes: buffer2.length,
+                  timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1e3 : Date.now()
+                });
+                emitToAndroid("VAULT_PROGRESS", {
+                  status: "SUCCESS",
+                  id: msg.key.id,
+                  senderPhone: cleanRawDigits || actualSender,
+                  mediaType,
+                  message: `\u2705 \u062A\u0645 \u0641\u0643 \u062A\u0634\u0641\u064A\u0631 \u0648\u062D\u0641\u0638 ${mediaType === "IMAGE" ? "\u0627\u0644\u0635\u0648\u0631\u0629" : "\u0627\u0644\u0648\u0633\u0627\u0626\u0637"} \u0628\u0646\u062C\u0627\u062D \u0641\u064A \u0627\u0644\u062E\u0632\u064A\u0646\u0629 (${Math.round(buffer2.length / 1024)} KB)`
+                });
+              } catch (writeErr) {
+                console.error("[VAULT] Failed to write vault media file:", writeErr);
+                emitToAndroid("VAULT_PROGRESS", {
+                  status: "ERROR",
+                  id: msg.key.id,
+                  senderPhone: cleanRawDigits || actualSender,
+                  message: `\u0641\u0634\u0644 \u0643\u062A\u0627\u0628\u0629 \u0645\u0644\u0641 \u0627\u0644\u0648\u0633\u0627\u0626\u0637 \u0639\u0644\u0649 \u0627\u0644\u0642\u0631\u0635: ${writeErr.message}`
+                });
+              }
+            } else {
+              console.warn("[VAULT] Failed to download media buffer for:", msg.key.id);
+              emitToAndroid("VAULT_PROGRESS", {
+                status: "ERROR",
+                id: msg.key.id,
+                senderPhone: cleanRawDigits || actualSender,
+                message: `\u062A\u0639\u0630\u0631 \u062C\u0644\u0628 \u0645\u0644\u0641 \u0627\u0644\u0648\u0633\u0627\u0626\u0637 (\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0631\u0627\u0628\u0637 \u0645\u0646 \u0648\u0627\u062A\u0633\u0627\u0628 \u0623\u0648 \u062A\u0645 \u0631\u0641\u0636\u0647).`
+              });
+            }
+          })().catch((topErr) => {
+            console.error("[VAULT] Unhandled error in media capture:", topErr);
           });
         }
-        emitToAndroid("MESSAGE_REVOKED", {
-          id: revokedId,
-          senderPhone: cleanPhone || actualSender,
-          timestamp: Date.now()
+        if (msg.key?.senderPn) {
+          linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
+        }
+        if (msg.key?.participantPn) {
+          linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
+        }
+        let resolved = { phone: cleanRawDigits, realPhone: null, lid: null, isLid: false };
+        try {
+          resolved = await resolvePhoneAndLid(actualSender, msg, sock);
+        } catch (_) {
+        }
+        const cleanPhone = resolved.realPhone || resolved.phone || cleanRawDigits;
+        if (msg.pushName && cleanPhone) {
+          const trimmedPush = msg.pushName.trim();
+          setContactName(cleanPhone, trimmedPush);
+          if (resolved.lid) {
+            setContactName(resolved.lid, trimmedPush);
+          }
+        }
+        const protocolMsg = msg.message?.protocolMessage;
+        if (protocolMsg && protocolMsg.type === 0 && protocolMsg.key?.id) {
+          const revokedId = protocolMsg.key.id;
+          const cachedMedia = rawMessagesCache.get(`media_file_${revokedId}`);
+          if (cachedMedia) {
+            emitToAndroid("VAULT_MEDIA_CAPTURED", {
+              id: revokedId,
+              senderPhone: cleanPhone || actualSender,
+              senderName: msg.pushName || getContactName(cleanPhone) || "",
+              mediaType: cachedMedia.mediaType,
+              isViewOnce: false,
+              originalText: cachedMedia.originalText,
+              localFilePath: cachedMedia.localFilePath,
+              mimeType: cachedMedia.mimeType,
+              fileSizeBytes: cachedMedia.fileSizeBytes,
+              timestamp: Date.now()
+            });
+          }
+          emitToAndroid("MESSAGE_REVOKED", {
+            id: revokedId,
+            senderPhone: cleanPhone || actualSender,
+            timestamp: Date.now()
+          });
+          continue;
+        }
+        let text = leaf?.conversation || leaf?.extendedTextMessage?.text || leaf?.imageMessage?.caption || leaf?.videoMessage?.caption || leaf?.documentMessage?.caption || mediaObj?.caption || "";
+        if (!text && hasMedia) {
+          if (isImage) text = isViewOnce ? "\u{1F4F7} [\u0635\u0648\u0631\u0629 \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F4F7} [\u0635\u0648\u0631\u0629]";
+          else if (isVideo) text = isViewOnce ? "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648 \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648]";
+          else if (isAudio) text = isViewOnce ? "\u{1F399}\uFE0F [\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F399}\uFE0F [\u0631\u0633\u0627\u0644\u0629 \u0635\u0648\u062A\u064A\u0629]";
+          else if (isDoc) text = "\u{1F4C4} [\u0645\u0633\u062A\u0646\u062F]";
+        }
+        if (!text || !cleanPhone) continue;
+        const senderName = msg.pushName || getContactName(cleanPhone) || "";
+        emitToAndroid("INCOMING_MESSAGE", {
+          id: msg.key.id,
+          senderPhone: cleanPhone,
+          realPhone: resolved.realPhone,
+          lid: resolved.lid,
+          isLid: resolved.isLid,
+          senderName,
+          text,
+          isGroup,
+          isViewOnce,
+          hasMedia,
+          mediaType,
+          timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1e3 : Date.now()
         });
-        continue;
+      } catch (msgErr) {
+        console.error("[MESSAGES_UPSERT] Unexpected error processing message:", msgErr);
       }
-      let text = msg.message.conversation || msg.message.extendedTextMessage?.text || msg.message.imageMessage?.caption || msg.message.videoMessage?.caption || msg.message.documentMessage?.caption || viewOnceObj?.imageMessage?.caption || viewOnceObj?.videoMessage?.caption || "";
-      if (!text && hasMedia) {
-        if (isImage) text = isViewOnce ? "\u{1F4F7} [\u0635\u0648\u0631\u0629 \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F4F7} [\u0635\u0648\u0631\u0629]";
-        else if (isVideo) text = isViewOnce ? "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648 \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648]";
-        else if (isAudio) text = "\u{1F399}\uFE0F [\u0631\u0633\u0627\u0644\u0629 \u0635\u0648\u062A\u064A\u0629]";
-        else if (isDoc) text = "\u{1F4C4} [\u0645\u0633\u062A\u0646\u062F]";
-      }
-      if (!text || !cleanPhone) continue;
-      const senderName = msg.pushName || getContactName(cleanPhone) || "";
-      emitToAndroid("INCOMING_MESSAGE", {
-        id: msg.key.id,
-        senderPhone: cleanPhone,
-        realPhone: resolved.realPhone,
-        lid: resolved.lid,
-        isLid: resolved.isLid,
-        senderName,
-        text,
-        isGroup,
-        timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1e3 : Date.now()
-      });
     }
   });
 }

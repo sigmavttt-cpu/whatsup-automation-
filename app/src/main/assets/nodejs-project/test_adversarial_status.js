@@ -718,6 +718,39 @@ async function runAdversarialSuite() {
         // 3. ZERO DM: Absolutely no messages sent to the participant's direct chat
         const chatCall = sock.calls.sendMessage.find(c => c.jid === participantJid);
         assert.strictEqual(chatCall, undefined, 'Must NEVER send any message to direct chat');
+
+        // 4. Status remains UNREAD in user's phone: sock.readMessages is NOT called
+        assert.strictEqual(sock.calls.readMessages.length, 0, 'Must NOT sync readMessages so status circle stays green');
+    });
+
+    await test('E7. REACT_STATUS with syncReadToSelf=true: Synchronizes read state when explicitly requested', async () => {
+        clearStatusKeys();
+        const testPhone = '967775556666';
+        const participantJid = `${testPhone}@s.whatsapp.net`;
+        statusKeysMap.set('STATUS_SYNC_01', {
+            remoteJid: 'status@broadcast',
+            id: 'STATUS_SYNC_01',
+            participant: participantJid
+        });
+
+        const sock = createMockSocket();
+        const dispatcher = createCommandDispatcher({
+            getSocket: () => sock,
+            startSession: async () => {},
+            getAuthFolder: () => './test_auth'
+        });
+
+        await dispatcher(JSON.stringify({
+            action: 'REACT_STATUS',
+            statusId: 'STATUS_SYNC_01',
+            participant: participantJid,
+            emoji: '👍',
+            syncReadToSelf: true
+        }));
+
+        assert.strictEqual(sock.calls.sendReceipt.length, 1);
+        assert.strictEqual(sock.calls.readMessages.length, 1, 'Must call readMessages when syncReadToSelf is explicitly true');
+        assert.strictEqual(sock.calls.readMessages[0][0].remoteJid, 'status@broadcast');
     });
 
     console.log('\n================================================================');

@@ -104,6 +104,10 @@ class LogRepositoryImpl @Inject constructor(
             totalIgnored = ignored
         )
     }
+
+    override suspend fun getRecentLogsForPhone(phone: String, limit: Int): List<ActivityLog> {
+        return logDao.getRecentLogsForPhone(phone, limit).map { it.toDomain() }
+    }
 }
 
 /**
@@ -286,6 +290,28 @@ class StatusRepositoryImpl @Inject constructor(
         val twentyFourHoursAgo = System.currentTimeMillis() - (24 * 3600_000L)
         statusDao.deleteExpiredDeletedStatuses(twentyFourHoursAgo)
     }
+
+    override suspend fun deleteStatuses(statusIds: List<String>) {
+        if (statusIds.isNotEmpty()) {
+            statusDao.deleteStatusesByIds(statusIds)
+        }
+    }
+
+    override suspend fun deleteStatus(statusId: String) {
+        statusDao.deleteStatusById(statusId)
+    }
+
+    override suspend fun markStatusSaved(statusId: String, savedFilePath: String?, isSaved: Boolean) {
+        statusDao.updateSaved(statusId, isSaved, savedFilePath, if (isSaved) System.currentTimeMillis() else null)
+    }
+
+    override suspend fun updateMediaUrl(statusId: String, mediaUrl: String) {
+        statusDao.updateMediaUrl(statusId, mediaUrl)
+    }
+
+    override fun getSavedStatuses(): Flow<List<com.whatsup.automation.domain.model.StatusStory>> {
+        return statusDao.getSavedStatuses().map { list -> list.map { it.toDomain() } }
+    }
 }
 
 // ----------------- دوال التحويل المساعدة (Mappers) -----------------
@@ -399,7 +425,10 @@ internal fun com.whatsup.automation.data.local.entity.StatusEntity.toDomain(): c
         isFavorite = isFavorite,
         isMuted = isMuted,
         isDeleted = isDeleted,
-        deletedAt = deletedAt?.let { Instant.ofEpochMilli(it) }
+        deletedAt = deletedAt?.let { Instant.ofEpochMilli(it) },
+        isSaved = isSaved,
+        savedFilePath = savedFilePath,
+        savedAt = savedAt?.let { Instant.ofEpochMilli(it) }
     )
 }
 
@@ -421,7 +450,10 @@ internal fun com.whatsup.automation.domain.model.StatusStory.toEntity(): com.wha
         isFavorite = isFavorite,
         isMuted = isMuted,
         isDeleted = isDeleted,
-        deletedAt = deletedAt?.toEpochMilli()
+        deletedAt = deletedAt?.toEpochMilli(),
+        isSaved = isSaved,
+        savedFilePath = savedFilePath,
+        savedAt = savedAt?.toEpochMilli()
     )
 }
 

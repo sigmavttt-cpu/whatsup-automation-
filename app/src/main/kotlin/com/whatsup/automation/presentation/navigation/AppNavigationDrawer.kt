@@ -74,22 +74,21 @@ fun AppNavigationDrawer(
 
     ModalDrawerSheet(
         modifier = modifier
-            .widthIn(min = 320.dp, max = 420.dp)
-            .fillMaxWidth(0.92f)
+            .widthIn(max = 340.dp)
+            .fillMaxWidth(0.85f)
             .fillMaxHeight(),
         drawerContainerColor = Color(0xFF060D12),
-        drawerShape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 24.dp, bottomEnd = 24.dp)
+        drawerShape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 20.dp, bottomEnd = 20.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(vertical = 12.dp)
+                .padding(vertical = 8.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             // ترويسة القائمة الجانبية (Header)
-            // ترويسة أنيقة ومباشرة
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -116,7 +115,7 @@ fun AppNavigationDrawer(
                         )
                     }
                     Text(
-                        text = "أقسام التطبيق والتبويبات",
+                        text = "القائمة الرئيسية",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -145,12 +144,11 @@ fun AppNavigationDrawer(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 1. قسم المحاور الأساسية
-            DrawerSectionTitle("المحاور الأساسية للتطبيق")
+            // 1. المحاور الأساسية
+            DrawerSectionTitle("المحاور الأساسية")
 
             DrawerNavRow(
-                title = "لوحة التحكم الرئيسية",
-                subtitle = "نظرة عامة والخدمة والأداء",
+                title = "لوحة التحكم",
                 icon = Icons.Default.Dashboard,
                 isSelected = currentRoute == Screen.Dashboard.route,
                 onClick = {
@@ -160,8 +158,7 @@ fun AppNavigationDrawer(
             )
 
             DrawerNavRow(
-                title = "مركز الأتمتة الشامل",
-                subtitle = "القواعد والردود، الحالات، والمجموعات",
+                title = "مركز الأتمتة",
                 icon = Icons.Default.Bolt,
                 isSelected = currentRoute == Screen.Automation.route,
                 onClick = {
@@ -171,8 +168,32 @@ fun AppNavigationDrawer(
             )
 
             DrawerNavRow(
-                title = "مركز المحادثات والتسجيل",
-                subtitle = "فلترة الأرقام وحفظ جهات الاتصال",
+                title = "الحالات والتفاعل",
+                icon = Icons.Default.AutoStories,
+                isSelected = currentRoute == Screen.Statuses.route,
+                onClick = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(Screen.Statuses.route) { launchSingleTop = true }
+                }
+            )
+
+            DrawerNavRow(
+                title = "ربط الحساب",
+                icon = Icons.Default.QrCode2,
+                isSelected = currentRoute == Screen.Pairing.route,
+                onClick = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(Screen.Pairing.route) { launchSingleTop = true }
+                }
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = Color(0x2600E676))
+
+            // 2. المحادثات والمحذوفات
+            DrawerSectionTitle("المحادثات والأرشيف")
+
+            DrawerNavRow(
+                title = "المحادثات والتسجيل",
                 icon = Icons.Default.Forum,
                 isSelected = currentRoute == Screen.ChatsHub.route,
                 onClick = {
@@ -182,26 +203,9 @@ fun AppNavigationDrawer(
             )
 
             DrawerNavRow(
-                title = "الحالات والتفاعل 📱",
-                subtitle = "مشاهدة الحالات والتفاعل التلقائي",
-                icon = Icons.Default.AutoStories,
-                isSelected = currentRoute == Screen.Statuses.route,
-                onClick = {
-                    scope.launch { drawerState.close() }
-                    navController.navigate(Screen.Statuses.route) { launchSingleTop = true }
-                }
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = Color(0x2600E676))
-
-            // 2. قسم المسترجعات والأرشيف
-            DrawerSectionTitle("المسترجعات والأرشيف")
-
-            DrawerNavRow(
-                title = "الرسائل المحذوفة والمسترجعة 🗑️",
-                subtitle = "استعراض ما حذفه الطرف الآخر ووسائط العرض لمرة واحدة",
+                title = "الرسائل المحذوفة",
                 icon = Icons.Default.DeleteSweep,
-                badge = "مسترجع",
+                badge = "المحذوفات",
                 badgeColor = WhatsAppGreenLight,
                 isSelected = currentRoute == Screen.Vault.route,
                 onClick = {
@@ -210,17 +214,15 @@ fun AppNavigationDrawer(
                 }
             )
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = Color(0x2600E676))
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = Color(0x2600E676))
 
-            // 3. قسم النظام والترميز
-            DrawerSectionTitle("النظام وترميز البرنامج")
+            // 3. النظام والأمان
+            DrawerSectionTitle("النظام والأمان")
 
-            // إعدادات ترميز وقفل التطبيق بالـ PIN
             DrawerNavRow(
-                title = "ترميز وقفل التطبيق (PIN والبصمة) 🔒",
-                subtitle = if (isAppLocked.value) "مفعّل ومحمي 🔒" else "غير مفعّل — اضغط للضبط",
+                title = "قفل التطبيق بالـ PIN",
                 icon = Icons.Default.Lock,
-                badge = if (isAppLocked.value) "محمي" else "ضبط",
+                badge = if (isAppLocked.value) "مفعّل" else "معطّل",
                 badgeColor = if (isAppLocked.value) WhatsAppGreenLight else AmberWarning,
                 isSelected = false,
                 onClick = {
@@ -230,8 +232,7 @@ fun AppNavigationDrawer(
             )
 
             DrawerNavRow(
-                title = "النظام وإدارة الجلسة ⚙️",
-                subtitle = "ربط واتساب وسجل العمليات اللحظي",
+                title = "سجل النظام والتشغيل",
                 icon = Icons.Default.Tune,
                 isSelected = currentRoute == Screen.System.route,
                 onClick = {
@@ -241,8 +242,17 @@ fun AppNavigationDrawer(
             )
 
             DrawerNavRow(
-                title = "الإعدادات العامة ⚙️",
-                subtitle = "الحساب، اللغة، والنسخ الاحتياطي",
+                title = "مركز الإشعارات",
+                icon = Icons.Default.Notifications,
+                isSelected = currentRoute == Screen.Notifications.route,
+                onClick = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(Screen.Notifications.route) { launchSingleTop = true }
+                }
+            )
+
+            DrawerNavRow(
+                title = "الإعدادات العامة",
                 icon = Icons.Default.Settings,
                 isSelected = currentRoute == Screen.Settings.route,
                 onClick = {
@@ -251,10 +261,8 @@ fun AppNavigationDrawer(
                 }
             )
 
-            // لوحة تشخيص المطور المحلية وفاحص الواجهات الذكي
             DrawerNavRow(
-                title = "تشخيص المطور والواجهات 🛠️",
-                subtitle = "فاحص الواجهات وسجلات الأعطال محلياً",
+                title = "تشخيص المطور محلياً",
                 icon = Icons.Default.BugReport,
                 badge = "Dev",
                 badgeColor = Color(0xFF6366F1),
@@ -265,22 +273,21 @@ fun AppNavigationDrawer(
                 }
             )
 
-            Spacer(modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.height(16.dp))
 
-            // تذييل القائمة: زر فحص التحديثات الفوري
+            // زر فحص التحديثات الفوري
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xCC0F1A22))
-                    .border(1.dp, Color(0x3300E676), RoundedCornerShape(14.dp))
+                    .border(1.dp, Color(0x3300E676), RoundedCornerShape(12.dp))
                     .clickable {
                         scope.launch { drawerState.close() }
                         onCheckUpdates()
                     }
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 14.dp, vertical = 11.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -288,10 +295,10 @@ fun AppNavigationDrawer(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = null, tint = WhatsAppGreenLight, modifier = Modifier.size(20.dp))
-                        Text("التحقق من وجود تحديثات 🚀", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Icon(Icons.Default.CloudDownload, contentDescription = null, tint = WhatsAppGreenLight, modifier = Modifier.size(18.dp))
+                        Text("التحقق من التحديثات", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
-                    Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = WhatsAppGreenLight, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = WhatsAppGreenLight, modifier = Modifier.size(16.dp))
                 }
             }
         }

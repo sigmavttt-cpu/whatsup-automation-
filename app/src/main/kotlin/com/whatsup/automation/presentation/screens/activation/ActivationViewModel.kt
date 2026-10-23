@@ -2,6 +2,7 @@ package com.whatsup.automation.presentation.screens.activation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.whatsup.automation.data.security.DeviceSecurityManager
 import com.whatsup.automation.data.security.LicenseManager
 import com.whatsup.automation.data.security.LicenseState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,10 +17,13 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ActivationViewModel @Inject constructor(
-    private val licenseManager: LicenseManager
+    private val licenseManager: LicenseManager,
+    private val deviceSecurityManager: DeviceSecurityManager
 ) : ViewModel() {
 
     val licenseState: StateFlow<LicenseState> = licenseManager.licenseState
+
+    val deviceFingerprint: String = deviceSecurityManager.getOrCreateDeviceFingerprint()
 
     private val _inputKey = MutableStateFlow("")
     val inputKey: StateFlow<String> = _inputKey.asStateFlow()
@@ -34,14 +38,14 @@ class ActivationViewModel @Inject constructor(
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     fun onKeyChange(key: String) {
-        _inputKey.value = key.trim().uppercase()
+        _inputKey.value = key.trim()
         _errorMessage.value = null
     }
 
     fun submitActivation() {
-        val key = _inputKey.value.trim().uppercase()
-        if (key.length < 5) {
-            _errorMessage.value = "يرجى كتابة كود تفعيل صحيح"
+        val key = _inputKey.value.trim()
+        if (key.length < 8) {
+            _errorMessage.value = "يرجى لصق رمز الهاش المشفر الخاص بالترخيص"
             return
         }
 
@@ -57,7 +61,7 @@ class ActivationViewModel @Inject constructor(
                     _isSubmitting.value = false
                 },
                 onFailure = { error ->
-                    _errorMessage.value = error.message ?: "فشل التفعيل، تحقق من صحة الكود واتصال الإنترنت"
+                    _errorMessage.value = error.message ?: "فشل التفعيل، تحقق من صحة الهاش أو الاتصال بالإنترنت"
                     _isSubmitting.value = false
                 }
             )

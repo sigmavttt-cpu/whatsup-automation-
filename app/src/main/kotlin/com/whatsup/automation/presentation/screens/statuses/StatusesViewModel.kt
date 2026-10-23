@@ -17,6 +17,7 @@ import javax.inject.Inject
 enum class StatusSubTab {
     NEW,
     VIEWED,
+    SAVED,
     FAVORITES,
     MUTED,
     DELETED_TEMP
@@ -47,6 +48,8 @@ data class StatusesUiState(
         get() = statuses.count { !it.isViewed && !it.isReacted && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
     val viewedCount: Int
         get() = statuses.count { (it.isViewed || it.isReacted) && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
+    val savedCount: Int
+        get() = statuses.count { it.isSaved }
     val favoritesCount: Int
         get() = statuses.count { (it.isFavorite || settings.favoriteSenders.contains(it.senderPhone)) && !it.isDeleted }
     val mutedCount: Int
@@ -63,6 +66,7 @@ data class StatusesUiState(
             var list = when (selectedSubTab) {
                 StatusSubTab.NEW -> statuses.filter { !it.isViewed && !it.isReacted && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
                 StatusSubTab.VIEWED -> statuses.filter { (it.isViewed || it.isReacted) && !it.isMuted && !it.isDeleted && !settings.mutedSenders.contains(it.senderPhone) }
+                StatusSubTab.SAVED -> statuses.filter { it.isSaved }
                 StatusSubTab.FAVORITES -> statuses.filter { (it.isFavorite || settings.favoriteSenders.contains(it.senderPhone)) && !it.isDeleted }
                 StatusSubTab.MUTED -> statuses.filter { (it.isMuted || settings.mutedSenders.contains(it.senderPhone)) && !it.isDeleted }
                 StatusSubTab.DELETED_TEMP -> statuses.filter { it.isDeleted }
@@ -372,6 +376,25 @@ class StatusesViewModel @Inject constructor(
         }
     }
 
+    fun deleteSelectedStatuses() {
+        viewModelScope.launch {
+            val ids = _uiState.value.selectedIds.toList()
+            if (ids.isNotEmpty()) {
+                statusRepository.deleteStatuses(ids)
+                clearSelection()
+                setMultiSelectMode(false)
+                forceRefreshTrigger.value = System.currentTimeMillis()
+            }
+        }
+    }
+
+    fun deleteStatus(statusId: String) {
+        viewModelScope.launch {
+            statusRepository.deleteStatus(statusId)
+            forceRefreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
     /**
      * حفظ وتنزيل وسائط الحالة أو نسخ نصها إلى الحافظة.
      */
@@ -382,32 +405,25 @@ class StatusesViewModel @Inject constructor(
     ) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                // إذا كانت الحالة نصية: يتم نسخ النص فوراً إلى حافظة الهاتف
-                if (status.mediaType == StatusMediaType.TEXT && !status.textContent.isNullOrBlank()) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        try {
-                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val clip = android.content.ClipData.newPlainText("WhatsApp Status", status.textContent)
-                            clipboard.setPrimaryClip(clip)
-                            onResult(true, "تم نسخ نص الحالة إلى الحافظة بنجاح 📋")
-                        } catch (e: Exception) {
-                            onResult(false, "تعذر نسخ النص: ${e.localizedMessage}")
-                        }
-                    }
-                    return@launch
-                }
+                val cleanSenderName = (status.senderName.ifBlank { status.senderPhone })
+                    .replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+                    .trim()
+                    .ifBlank { "WhatsApp_Status" }
+                val dateStr = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
 
-                // إذا كانت وسائط أو مستندات: حفظ في مجلد الصور أو التنزيلات
-                val mediaPath = status.mediaUrl
+                val targetDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
+                val statusFolder = java.io.File(targetDir, "WhatsUp_Statuses")
+                if (!statusFolder.exists()) statusFolder.mkdirs()
+
+                val mediaPath = status.savedFilePath ?: status.mediaUrl
+
                 if (!mediaPath.isNullOrBlank() && java.io.File(mediaPath).exists()) {
                     val srcFile = java.io.File(mediaPath)
                     val ext = srcFile.extension.ifBlank {
                         if (status.mediaType == StatusMediaType.VIDEO) "mp4" else "jpg"
                     }
-                    val targetDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
-                    val statusFolder = java.io.File(targetDir, "WhatsUp_Statuses")
-                    if (!statusFolder.exists()) statusFolder.mkdirs()
-                    val destFile = java.io.File(statusFolder, "status_${System.currentTimeMillis()}.$ext")
+                    val destFile = java.io.File(statusFolder, "${cleanSenderName}_$dateStr.$ext")
                     srcFile.copyTo(destFile, overwrite = true)
 
                     android.media.MediaScannerConnection.scanFile(
@@ -416,20 +432,100 @@ class StatusesViewModel @Inject constructor(
                         null,
                         null
                     )
+                    statusRepository.markStatusSaved(status.id, destFile.absolutePath, true)
+                    forceRefreshTrigger.value = System.currentTimeMillis()
+
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        onResult(true, "تم حفظ الحالة بنجاح 📥")
+                        onResult(true, "تم حفظ وسائط الحالة باسم ($cleanSenderName) في المعرض 📥")
                     }
-                } else if (!status.textContent.isNullOrBlank()) {
-                    // إذا نص ولكن لم يكن مصنفاً كـ TEXT: نسخ للحافظة أيضاً
+                } else if (status.mediaType == StatusMediaType.TEXT && !status.textContent.isNullOrBlank()) {
+                    // إذا نصية: نسخ للحافظة وحفظ ملف نصي باسم الشخص بالمعرض
+                    val destFile = java.io.File(statusFolder, "${cleanSenderName}_$dateStr.txt")
+                    destFile.writeText("حالة من: ${status.senderName} (${status.senderPhone})\nالوقت: ${status.timestamp}\n\n${status.textContent}")
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(destFile.absolutePath),
+                        null,
+                        null
+                    )
+                    statusRepository.markStatusSaved(status.id, destFile.absolutePath, true)
+                    forceRefreshTrigger.value = System.currentTimeMillis()
+
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("WhatsApp Status", status.textContent)
-                        clipboard.setPrimaryClip(clip)
-                        onResult(true, "تم نسخ نص الحالة إلى الحافظة بنجاح 📋")
+                        try {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("WhatsApp Status", status.textContent)
+                            clipboard.setPrimaryClip(clip)
+                            onResult(true, "تم نسخ النص وحفظ الحالة باسم ($cleanSenderName) 📋")
+                        } catch (_: Exception) {
+                            onResult(true, "تم حفظ نص الحالة باسم ($cleanSenderName) 📋")
+                        }
                     }
                 } else {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        onResult(true, "تم حفظ الحالة بنجاح 📥")
+                    // الوسائط لم تكتمل بعد:
+                    // 1. أولاً: فحص مجلد واتساب المخفي على الجهاز (.Statuses)
+                    val localStatusFile = findInLocalWhatsAppStatuses(status.mediaType, status.timestamp.toEpochMilli())
+                    if (localStatusFile != null && localStatusFile.exists() && localStatusFile.length() > 0) {
+                        val ext = localStatusFile.extension.ifBlank {
+                            if (status.mediaType == StatusMediaType.VIDEO) "mp4" else "jpg"
+                        }
+                        val destFile = java.io.File(statusFolder, "${cleanSenderName}_$dateStr.$ext")
+                        localStatusFile.copyTo(destFile, overwrite = true)
+                        android.media.MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(destFile.absolutePath),
+                            null,
+                            null
+                        )
+                        statusRepository.updateMediaUrl(status.id, localStatusFile.absolutePath)
+                        statusRepository.markStatusSaved(status.id, destFile.absolutePath, true)
+                        forceRefreshTrigger.value = System.currentTimeMillis()
+
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onResult(true, "تم استخراج وحفظ وسائط الحالة فوراً من جهازك باسم ($cleanSenderName) 📥")
+                        }
+                        return@launch
+                    }
+
+                    // 2. ثانياً: استدعاء التنزيل الفوري من المحرك والانتظار حتى اكتمال التنزيل
+                    whatsAppEngine.downloadStatusMedia(status.id)
+                    var downloadedFile: java.io.File? = null
+                    for (attempt in 1..15) {
+                        kotlinx.coroutines.delay(400L)
+                        val updated = statusRepository.getStatusById(status.id)
+                        val p = updated?.mediaUrl ?: status.mediaUrl
+                        if (!p.isNullOrBlank()) {
+                            val candidate = java.io.File(p)
+                            if (candidate.exists() && candidate.length() > 0) {
+                                downloadedFile = candidate
+                                break
+                            }
+                        }
+                    }
+
+                    if (downloadedFile != null && downloadedFile.exists()) {
+                        val ext = downloadedFile.extension.ifBlank {
+                            if (status.mediaType == StatusMediaType.VIDEO) "mp4" else "jpg"
+                        }
+                        val destFile = java.io.File(statusFolder, "${cleanSenderName}_$dateStr.$ext")
+                        downloadedFile.copyTo(destFile, overwrite = true)
+
+                        android.media.MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(destFile.absolutePath),
+                            null,
+                            null
+                        )
+                        statusRepository.markStatusSaved(status.id, destFile.absolutePath, true)
+                        forceRefreshTrigger.value = System.currentTimeMillis()
+
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onResult(true, "تم حفظ وسائط الحالة بنجاح ونقلها إلى تبويب المحفوظات والمعرض 📥")
+                        }
+                    } else {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onResult(false, "جارٍ استدعاء وسائط الحالة من واتساب في الخلفية، يرجى المحاولة بعد لحظات ⏳")
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -437,6 +533,63 @@ class StatusesViewModel @Inject constructor(
                     onResult(false, "تعذر حفظ الحالة: ${e.localizedMessage ?: "خطأ غير متوقع"}")
                 }
             }
+        }
+    }
+
+    /**
+     * فحص المجلد المخفي لواتساب الرسمي (.Statuses) على ذاكرة الجهاز لاستخراج ملف الوسائط مباشرة.
+     */
+    private fun findInLocalWhatsAppStatuses(mediaType: StatusMediaType, timestamp: Long): java.io.File? {
+        val candidateDirs = listOf(
+            java.io.File(android.os.Environment.getExternalStorageDirectory(), "Android/media/com.whatsapp/WhatsApp/Media/.Statuses"),
+            java.io.File(android.os.Environment.getExternalStorageDirectory(), "WhatsApp/Media/.Statuses")
+        )
+        for (dir in candidateDirs) {
+            try {
+                if (dir.exists() && dir.isDirectory) {
+                    val files = dir.listFiles() ?: continue
+                    val matching = files.filter { f ->
+                        val ext = f.extension.lowercase()
+                        if (mediaType == StatusMediaType.VIDEO) ext in listOf("mp4", "mkv", "3gp")
+                        else ext in listOf("jpg", "jpeg", "png", "webp")
+                    }.sortedByDescending { it.lastModified() }
+
+                    if (matching.isNotEmpty()) {
+                        val closeMatch = matching.firstOrNull { Math.abs(it.lastModified() - timestamp) < 24 * 3600 * 1000L }
+                            ?: matching.firstOrNull()
+                        if (closeMatch != null && closeMatch.length() > 0) {
+                            return closeMatch
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return null
+    }
+
+    /**
+     * طلب استدعاء وسائط الحالة من واتساب عند فتح المعاينة في حال عدم توفرها.
+     */
+    fun requestStatusMediaDownload(statusId: String) {
+        viewModelScope.launch {
+            try {
+                val status = statusRepository.getStatusById(statusId)
+                if (status != null && status.mediaType != StatusMediaType.TEXT && status.mediaUrl.isNullOrBlank()) {
+                    val local = findInLocalWhatsAppStatuses(status.mediaType, status.timestamp.toEpochMilli())
+                    if (local != null) {
+                        statusRepository.updateMediaUrl(statusId, local.absolutePath)
+                        forceRefreshTrigger.value = System.currentTimeMillis()
+                        return@launch
+                    }
+                }
+                whatsAppEngine.downloadStatusMedia(statusId)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun unSaveStatus(statusId: String) {
+        viewModelScope.launch {
+            statusRepository.markStatusSaved(statusId, null, false)
         }
     }
 }

@@ -28,17 +28,16 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.whatsup.automation.presentation.components.AppScreenHeader
 import com.whatsup.automation.presentation.screens.groups.GroupsScreen
 import com.whatsup.automation.presentation.screens.groups.GroupsViewModel
 import com.whatsup.automation.presentation.screens.rules.RulesScreen
 import com.whatsup.automation.presentation.screens.rules.RulesViewModel
-import com.whatsup.automation.presentation.screens.statuses.StatusesScreen
-import com.whatsup.automation.presentation.screens.statuses.StatusesViewModel
 import com.whatsup.automation.presentation.theme.*
 
 enum class AutomationTab(val title: String, val icon: ImageVector) {
-    RULES("قواعد الرد والتسجيل", Icons.Filled.Bolt),
-    GROUPS("المجموعات والنشر الجماعي", Icons.Filled.Groups)
+    RULES("قواعد الرد", Icons.Filled.Bolt),
+    GROUPS("مجموعات البث", Icons.Filled.Groups)
 }
 
 @Composable
@@ -46,6 +45,7 @@ fun AutomationHubScreen(
     rulesViewModel: RulesViewModel,
     groupsViewModel: GroupsViewModel,
     initialTab: AutomationTab = AutomationTab.RULES,
+    onOpenDrawer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(initialTab) }
@@ -59,77 +59,48 @@ fun AutomationHubScreen(
             .fillMaxSize()
             .background(DarkBgPrimary)
     ) {
-        // شريط التبويبات الفخم بتصميم Cyber Jade Glassmorphic
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(DarkSurface)
-                    .border(1.dp, Brush.horizontalGradient(listOf(Color(0x3300E676), Color(0x3300B0FF))), RoundedCornerShape(20.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                AutomationTab.values().forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    val bgBrush = if (isSelected) {
-                        Brush.horizontalGradient(listOf(WhatsAppGreen, WhatsAppGreenLight))
-                    } else {
-                        Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
-                    }
-
-                    com.whatsup.automation.presentation.components.AppTooltipBox(
-                        tooltipText = if (tab == AutomationTab.RULES) "إدارة قواعد الرد التلقائي والتسجيل وحفظ الأرقام" else "إدارة مجموعات البث والحملات والإرسال الجماعي",
-                        modifier = Modifier.weight(1f)
-                    ) {
+        // شريط الرأس القياسي المنظم مع محدد التبويب المدمج
+        AppScreenHeader(
+            title = if (selectedTab == AutomationTab.RULES) "محرك القواعد والردود" else "مجموعات البث والنشر",
+            subtitle = if (selectedTab == AutomationTab.RULES) "الردود التلقائية وحفظ جهات الاتصال الذكي" else "إدارة مجموعات البث والإرسال الجماعي",
+            onOpenDrawer = onOpenDrawer,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            actions = {
+                // شريط تبويب فرعي مدمج وأنيق
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DarkSurface)
+                        .border(1.dp, Color(0x3300E676), RoundedCornerShape(12.dp))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    AutomationTab.values().forEach { tab ->
+                        val isSelected = selectedTab == tab
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(bgBrush)
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(16.dp))
-                                    } else Modifier
-                                )
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(if (isSelected) WhatsAppGreen else Color.Transparent)
                                 .clickable {
                                     if (!isSelected) {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         selectedTab = tab
                                     }
                                 }
-                                .padding(vertical = 10.dp),
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.title,
-                                    tint = if (isSelected) Color.White else WhatsAppGreenLight,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                                Text(
-                                    text = tab.title,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else TextPrimary,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            }
+                            Text(
+                                text = if (tab == AutomationTab.RULES) "القواعد" else "المجموعات",
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else TextSecondary
+                            )
                         }
                     }
                 }
             }
-        }
+        )
 
         // محتوى التبويب المختار مع أنيميشن انتقال ناعم
         AnimatedContent(
@@ -141,7 +112,7 @@ fun AutomationHubScreen(
             modifier = Modifier.fillMaxSize()
         ) { tab ->
             when (tab) {
-                AutomationTab.RULES -> RulesScreen(viewModel = rulesViewModel)
+                AutomationTab.RULES -> RulesScreen(viewModel = rulesViewModel, showHeader = false)
                 AutomationTab.GROUPS -> GroupsScreen(viewModel = groupsViewModel)
             }
         }

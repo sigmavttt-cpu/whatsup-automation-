@@ -55,6 +55,8 @@ class SessionKeystore @Inject constructor(
         private const val KEY_LICENSE_EXPIRES_AT = "license_expires_at"
         private const val KEY_LAST_LICENSE_VERIFIED_AT = "last_license_verified_at"
         private const val KEY_DEVICE_FINGERPRINT = "device_fingerprint"
+        private const val KEY_VAULT_TRACKING_MODE = "vault_tracking_mode"
+        private const val KEY_VAULT_TRACKED_PHONES = "vault_tracked_phones"
 
 
         private fun createEncryptedPrefs(context: Context): SharedPreferences {
@@ -129,7 +131,7 @@ class SessionKeystore @Inject constructor(
     // --- إدارة التراخيص والاشتراكات المشفرة عتادياً ---
     fun getLicenseKey(): String? = securePrefs.getString(KEY_LICENSE_KEY, null)
     fun setLicenseKey(key: String?) {
-        securePrefs.edit().putString(KEY_LICENSE_KEY, key?.trim()?.uppercase()).apply()
+        securePrefs.edit().putString(KEY_LICENSE_KEY, key?.trim()).apply()
     }
 
     fun getLicenseStatus(): String = securePrefs.getString(KEY_LICENSE_STATUS, "NOT_ACTIVATED") ?: "NOT_ACTIVATED"
@@ -163,6 +165,45 @@ class SessionKeystore @Inject constructor(
 
     fun clearSession() {
         securePrefs.edit().clear().apply()
+    }
+
+    /**
+     * إعدادات نطاق حفظ وتتبع المحذوفات في الخزينة:
+     * "ALL" = حفظ محذوفات جميع جهات الاتصال (افتراضي).
+     * "SELECTED" = حفظ محذوفات الأشخاص المحددين فقط في القائمة.
+     */
+    fun getVaultTrackingMode(): String = securePrefs.getString(KEY_VAULT_TRACKING_MODE, "ALL") ?: "ALL"
+
+    fun setVaultTrackingMode(mode: String) {
+        securePrefs.edit().putString(KEY_VAULT_TRACKING_MODE, mode).apply()
+    }
+
+    fun getVaultTrackedPhones(): Set<String> = securePrefs.getStringSet(KEY_VAULT_TRACKED_PHONES, emptySet()) ?: emptySet()
+
+    fun setVaultTrackedPhones(phones: Set<String>) {
+        securePrefs.edit().putStringSet(KEY_VAULT_TRACKED_PHONES, phones).apply()
+    }
+
+    fun addVaultTrackedPhone(phone: String) {
+        val current = getVaultTrackedPhones().toMutableSet()
+        current.add(phone.trim())
+        setVaultTrackedPhones(current)
+    }
+
+    fun removeVaultTrackedPhone(phone: String) {
+        val current = getVaultTrackedPhones().toMutableSet()
+        val cleanPhone = phone.replace("[^0-9]".toRegex(), "")
+        current.removeAll { it.replace("[^0-9]".toRegex(), "") == cleanPhone }
+        setVaultTrackedPhones(current)
+    }
+
+    fun isPhoneTrackedForVault(phone: String): Boolean {
+        val mode = getVaultTrackingMode()
+        if (mode == "ALL") return true
+        val tracked = getVaultTrackedPhones()
+        val cleanPhone = phone.replace("[^0-9]".toRegex(), "")
+        if (cleanPhone.isEmpty()) return false
+        return tracked.any { it.replace("[^0-9]".toRegex(), "") == cleanPhone }
     }
 }
 

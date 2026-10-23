@@ -253,25 +253,129 @@ fun SubscriptionAuthDialog(
                             )
                         }
                     } else {
-                        // حقل إدخال الكود الفاخر
+                        // بطاقة عرض بصمة ومعرّف الجهاز
+                        val fingerprint = viewModel.deviceFingerprint
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0x300F1A22))
+                                .border(1.dp, Color(0x3300E676), RoundedCornerShape(14.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "بصمة جهازك (Device ID):",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF94A3B8),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = if (fingerprint.length > 20) "${fingerprint.take(10)}...${fingerprint.takeLast(10)}" else fingerprint,
+                                        fontSize = 12.sp,
+                                        color = WhatsAppGreenLight,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("Device ID", fingerprint)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "تم نسخ معرّف الجهاز بنجاح 📋", Toast.LENGTH_SHORT).show()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6600E676)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E676)),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = WhatsAppGreenLight
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "نسخ",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = WhatsAppGreenLight
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // ترويسة حقل الهاش مع زر اللصق السريع
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "رمز الترخيص المشفر (الهاش):",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFE2E8F0)
+                            )
+                            TextButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+                                    if (!text.isNullOrBlank()) {
+                                        viewModel.onKeyChange(text)
+                                        Toast.makeText(context, "تم لصق الهاش من الحافظة 📋", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "الحافظة فارغة", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentPaste,
+                                    contentDescription = null,
+                                    tint = WhatsAppGreenLight,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "لصق من الحافظة",
+                                    fontSize = 12.sp,
+                                    color = WhatsAppGreenLight,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // صندوق إدخال الهاش الكبير (Multi-line Glassmorphic Text Area)
                         OutlinedTextField(
                             value = inputKey,
                             onValueChange = { viewModel.onKeyChange(it) },
                             modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                            maxLines = 5,
+                            singleLine = false,
+                            textStyle = LocalTextStyle.current.copy(
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            ),
                             placeholder = {
                                 Text(
-                                    text = "WUP-XXXX-XXXX-XXXX",
+                                    text = "الصق هنا كود الهاش المشفر الخاص بالترخيص (SIGMA-...)...",
                                     color = Color(0xFF64748B),
-                                    fontSize = 14.sp,
-                                    textAlign = TextAlign.Center,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Start,
                                     modifier = Modifier.fillMaxWidth()
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Key,
-                                    contentDescription = null,
-                                    tint = WhatsAppGreenLight
                                 )
                             },
                             trailingIcon = {
@@ -285,7 +389,6 @@ fun SubscriptionAuthDialog(
                                     }
                                 }
                             },
-                            singleLine = true,
                             shape = RoundedCornerShape(16.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
@@ -296,7 +399,7 @@ fun SubscriptionAuthDialog(
                                 unfocusedContainerColor = Color(0x40060D12)
                             ),
                             keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Characters,
+                                capitalization = KeyboardCapitalization.None,
                                 imeAction = ImeAction.Done
                             ),
                             keyboardActions = KeyboardActions(

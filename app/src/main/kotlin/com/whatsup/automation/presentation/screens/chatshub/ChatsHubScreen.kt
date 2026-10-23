@@ -1,6 +1,5 @@
 package com.whatsup.automation.presentation.screens.chatshub
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -17,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,32 +25,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.whatsup.automation.presentation.components.AppEmptyState
+import com.whatsup.automation.presentation.components.AppScreenHeader
 import com.whatsup.automation.presentation.components.BentoCard
 import com.whatsup.automation.presentation.components.BentoSkeletonList
-import com.whatsup.automation.presentation.components.PulseReactor
+import com.whatsup.automation.presentation.screens.chatshub.components.*
 import com.whatsup.automation.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatsHubScreen(
     viewModel: ChatsHubViewModel,
+    onNavigateToVault: () -> Unit = {},
+    onOpenDrawer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val haptic = LocalHapticFeedback.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val pullToRefreshState = rememberPullToRefreshState()
     var showDeletedDialog by remember { mutableStateOf(false) }
     var showMediaDialog by remember { mutableStateOf(false) }
-    var selectedMediaItem by remember { mutableStateOf<com.whatsup.automation.domain.model.VaultItem?>(null) }
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
@@ -67,219 +69,184 @@ fun ChatsHubScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-        // رأس الشاشة (Header)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "مركز المحادثات والتسجيل",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    PulseReactor(isActive = true, activeColor = CyberCyan)
+            AppScreenHeader(
+                title = "مركز المحادثات والتسجيل",
+                subtitle = "رصد جهات الاتصال غير المسجلة ومتابعة التسجيلات الحية",
+                onOpenDrawer = onOpenDrawer,
+                modifier = Modifier.padding(bottom = 12.dp),
+                actions = {
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.refresh()
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(DarkSurface)
+                            .border(1.dp, Color(0x3300E676), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "تحديث",
+                            tint = WhatsAppGreenLight,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
-                Text(
-                    text = "رصد جهات الاتصال غير المسجلة ومتابعة التسجيلات الحية",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-            }
+            )
 
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.refresh()
-                },
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.updateSearchQuery(it) },
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(GlassFill)
-                    .border(1.dp, GlassBorder, CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "تحديث",
-                    tint = CyberCyan,
-                    modifier = Modifier.size(18.dp)
+                    .fillMaxWidth()
+                    .padding(bottom = 14.dp),
+                placeholder = { Text("بحث بالاسم، الرقم، أو نص الرسالة...", color = TextMuted, fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp)) },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.updateSearchQuery("") }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "مسح", tint = TextMuted, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = DarkSurface,
+                    unfocusedContainerColor = DarkSurface,
+                    focusedBorderColor = WhatsAppGreen,
+                    unfocusedBorderColor = Color(0x3300E676),
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
                 )
-            }
-        }
-
-        // حقل البحث الذكي
-        OutlinedTextField(
-            value = uiState.searchQuery,
-            onValueChange = { viewModel.updateSearchQuery(it) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 14.dp),
-            placeholder = { Text("بحث بالاسم، الرقم، أو نص الرسالة...", color = TextMuted, fontSize = 13.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp)) },
-            trailingIcon = {
-                if (uiState.searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                        Icon(Icons.Default.Close, contentDescription = "مسح", tint = TextMuted, modifier = Modifier.size(16.dp))
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = DarkSurface,
-                unfocusedContainerColor = DarkSurface,
-                focusedBorderColor = WhatsAppGreen,
-                unfocusedBorderColor = Color(0x3300E676),
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary
-            )
-        )
-
-        // بطاقة 1: الرسائل المحذوفة لدى الجميع (Anti-Delete)
-        BentoCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp),
-            borderBrush = ObsidianGlowBorder.Cyan
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE11D48).copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.DeleteSweep,
-                            contentDescription = null,
-                            tint = Color(0xFFE11D48),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "الرسائل المحذوفة لدى الجميع 🗑️",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "${uiState.deletedCount} رسائل مسترجعة تلقائياً",
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
-                    }
-                }
-                if (uiState.deletedCount > 0) {
-                    TextButton(onClick = { showDeletedDialog = true }) {
-                        Text("عرض الكل", fontSize = 11.5.sp, color = CyberCyan, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // بطاقة 2: الخزينة ووسائط العرض لمرة واحدة (Media Vault)
-        BentoCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 14.dp),
-            borderBrush = ObsidianGlowBorder.Emerald
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(WhatsAppGreen.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Lock,
-                            contentDescription = null,
-                            tint = WhatsAppGreen,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "الخزينة ووسائط العرض لمرة واحدة 🔒",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "${uiState.vaultMediaCount} وسائط محفوظة ومحمية",
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
-                    }
-                }
-                if (uiState.vaultMediaCount > 0) {
-                    TextButton(onClick = { showMediaDialog = true }) {
-                        Text("استعراض", fontSize = 11.5.sp, color = WhatsAppGreen, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // شريط التبويبات الفرعية الثلاثة مع العدادات الحية
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val tabs = listOf(
-                Triple(ChatsHubTab.UNREGISTERED, uiState.unregisteredCount, AmberWarning),
-                Triple(ChatsHubTab.REGISTERED_ALL, uiState.registeredAllCount, WhatsAppGreen),
-                Triple(ChatsHubTab.REGISTERED_TODAY, uiState.registeredTodayCount, NeonPurple)
             )
 
-            items(tabs) { (tab, count, color) ->
-                val isSelected = uiState.selectedTab == tab
-                val bgTint by animateColorAsState(
-                    targetValue = if (isSelected) color.copy(alpha = 0.16f) else DarkSurface,
-                    animationSpec = tween(200),
-                    label = "tabBg"
+            // بطاقة 1: الرسائل المحذوفة لدى الجميع
+            BentoCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onNavigateToVault()
+                    },
+                borderBrush = ObsidianGlowBorder.Amber
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(AmberWarning.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.DeleteSweep, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(20.dp))
+                        }
+                        Column {
+                            Text("الرسائل المحذوفة لدى الجميع", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text(
+                                text = if (uiState.deletedCount > 0) "${uiState.deletedCount} رسالة محذوفة تم التقاطها" else "لا توجد رسائل محذوفة حالياً",
+                                fontSize = 11.5.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { showDeletedDialog = true }) {
+                            Text("استعراض", fontSize = 12.sp, color = AmberWarning, fontWeight = FontWeight.Bold)
+                        }
+                        Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            // بطاقة 2: الخزينة ووسائط العرض لمرة واحدة
+            BentoCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 14.dp)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onNavigateToVault()
+                    },
+                borderBrush = ObsidianGlowBorder.Emerald
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(WhatsAppGreen.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Lock, contentDescription = null, tint = WhatsAppGreen, modifier = Modifier.size(20.dp))
+                        }
+                        Column {
+                            Text("الخزينة ووسائط العرض لمرة واحدة", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text(
+                                text = if (uiState.vaultMediaCount > 0) "${uiState.vaultMediaCount} وسائط محفوظة ومحمية" else "لا توجد وسائط مسجلة",
+                                fontSize = 11.5.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { showMediaDialog = true }) {
+                            Text("استعراض", fontSize = 12.sp, color = WhatsAppGreenLight, fontWeight = FontWeight.Bold)
+                        }
+                        Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            // شريط التبويبات الثلاثة
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val tabs = listOf(
+                    Triple(ChatsHubTab.UNREGISTERED, uiState.unregisteredCount, AmberWarning),
+                    Triple(ChatsHubTab.REGISTERED_ALL, uiState.registeredAllCount, WhatsAppGreen),
+                    Triple(ChatsHubTab.REGISTERED_TODAY, uiState.registeredTodayCount, CyberCyan)
                 )
-                val borderBrush = if (isSelected) {
-                    Brush.horizontalGradient(listOf(color, color.copy(alpha = 0.6f)))
-                } else {
-                    Brush.horizontalGradient(listOf(Color(0x3300E676), Color(0x3300B0FF)))
-                }
 
-                val tooltipText = when (tab) {
-                    ChatsHubTab.UNREGISTERED -> "الأرقام التي تواصلت معك ولم تُحفظ في دفتر الهاتف بعد ($count رقم)"
-                    ChatsHubTab.REGISTERED_ALL -> "كافة جهات الاتصال المسجلة في هاتفك ($count جهة)"
-                    ChatsHubTab.REGISTERED_TODAY -> "جهات الاتصال التي تم حفظها تلقائياً اليوم ($count جهة)"
-                }
+                items(tabs) { (tab, count, color) ->
+                    val isSelected = uiState.selectedTab == tab
+                    val bgTint by animateColorAsState(
+                        targetValue = if (isSelected) color.copy(alpha = 0.16f) else DarkSurface,
+                        animationSpec = tween(200),
+                        label = "tabBg"
+                    )
+                    val borderBrush = if (isSelected) {
+                        Brush.horizontalGradient(listOf(color, color.copy(alpha = 0.6f)))
+                    } else {
+                        Brush.horizontalGradient(listOf(Color(0x3300E676), Color(0x3300B0FF)))
+                    }
 
-                com.whatsup.automation.presentation.components.AppTooltipBox(tooltipText = tooltipText) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
@@ -305,7 +272,6 @@ fun ChatsHubScreen(
                                 color = if (isSelected) color else TextSecondary
                             )
 
-                            // Badge عداد التبويب
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
@@ -316,144 +282,148 @@ fun ChatsHubScreen(
                                     text = count.toString(),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White else TextPrimary
+                                    color = if (isSelected) Color.White else TextPrimary,
+                                    fontFamily = FontFamily.Monospace
                                 )
                             }
                         }
                     }
                 }
             }
-        }
 
-        // محتوى التبويب المحدد
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(vertical = 4.dp)
-            ) {
-                BentoSkeletonList(itemCount = 4, itemHeight = 110.dp)
-            }
-        } else {
-            val query = uiState.searchQuery.trim().lowercase()
+            // قائمة البيانات مع فحص حالة التحميل
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(vertical = 4.dp)
+                ) {
+                    BentoSkeletonList(itemCount = 4, itemHeight = 110.dp)
+                }
+            } else {
+                val query = uiState.searchQuery.trim().lowercase()
 
-            when (uiState.selectedTab) {
-                ChatsHubTab.UNREGISTERED -> {
-                    val filtered = uiState.unregisteredList.filter {
-                        query.isEmpty() || it.phone.contains(query) || it.lastMessage.lowercase().contains(query)
-                    }
-
-                    if (filtered.isEmpty()) {
-                        if (query.isNotEmpty()) {
-                            EmptyHubState(
-                                icon = Icons.Outlined.SearchOff,
-                                title = "لا توجد نتائج مطابقة للبحث",
-                                subtitle = "لم نعثر على أي محادثة غير مسجلة تطابق \"$query\".",
-                                ctaText = "مسح البحث 🔍",
-                                ctaIcon = Icons.Filled.Close,
-                                onCtaClick = { viewModel.updateSearchQuery("") }
-                            )
-                        } else {
-                            EmptyHubState(
-                                icon = Icons.Outlined.CheckCircle,
-                                title = "لا توجد رسائل من غير مسجلين",
-                                subtitle = "جميع من راسلوك خلال آخر 24 ساعة مسجلين مسبقاً أو لا توجد رسائل جديدة.",
-                                ctaText = "تحديث وفحص الرسائل 🔄",
-                                ctaIcon = Icons.Filled.Refresh,
-                                onCtaClick = { viewModel.refresh() }
-                            )
+                when (uiState.selectedTab) {
+                    ChatsHubTab.UNREGISTERED -> {
+                        val filtered = uiState.unregisteredList.filter {
+                            query.isEmpty() || it.phone.contains(query) || it.lastMessage.lowercase().contains(query)
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filtered, key = { it.phone }) { item ->
-                                UnregisteredCard(
-                                    item = item,
-                                    onOpenChat = { viewModel.openWhatsAppChat(item.phone) }
+
+                        if (filtered.isEmpty()) {
+                            if (query.isNotEmpty()) {
+                                AppEmptyState(
+                                    icon = Icons.Outlined.SearchOff,
+                                    title = "لا توجد نتائج مطابقة للبحث",
+                                    subtitle = "لم نعثر على أي محادثة غير مسجلة تطابق \"$query\".",
+                                    actionLabel = "مسح البحث",
+                                    onActionClick = { viewModel.updateSearchQuery("") }
                                 )
+                            } else {
+                                AppEmptyState(
+                                    icon = Icons.Outlined.CheckCircle,
+                                    title = "لا توجد أرقام غير مسجلة حالياً",
+                                    subtitle = "جميع جهات الاتصال التي تواصلت معك محفوظة في دفتر هاتفك.",
+                                    actionLabel = "تحديث وفحص الرسائل",
+                                    onActionClick = { viewModel.refresh() }
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 80.dp)
+                            ) {
+                                items(filtered, key = { it.phone }) { item ->
+                                    UnregisteredCard(
+                                        item = item,
+                                        onOpenChat = { viewModel.openWhatsAppChat(item.phone) }
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                ChatsHubTab.REGISTERED_ALL -> {
-                    val filtered = uiState.registeredAllList.filter {
-                        query.isEmpty() || it.name.lowercase().contains(query) || it.phone.contains(query)
-                    }
-
-                    if (filtered.isEmpty()) {
-                        if (query.isNotEmpty()) {
-                            EmptyHubState(
-                                icon = Icons.Outlined.SearchOff,
-                                title = "لا توجد جهات اتصال مطابقة للبحث",
-                                subtitle = "لم يتم العثور على أرقام أو أسماء تطابق \"$query\".",
-                                ctaText = "مسح البحث 🔍",
-                                ctaIcon = Icons.Filled.Close,
-                                onCtaClick = { viewModel.updateSearchQuery("") }
-                            )
-                        } else {
-                            EmptyHubState(
-                                icon = Icons.Outlined.Contacts,
-                                title = "لا توجد جهات اتصال مسجلة",
-                                subtitle = "لم يتم العثور على جهات اتصال مسجلة بالهاتف حتى الآن.",
-                                ctaText = "مزامنة جهات الاتصال 🔄",
-                                ctaIcon = Icons.Filled.Sync,
-                                onCtaClick = { viewModel.refresh() }
-                            )
+                    ChatsHubTab.REGISTERED_ALL -> {
+                        val filtered = uiState.registeredAllList.filter {
+                            query.isEmpty() || it.name.lowercase().contains(query) || it.phone.contains(query)
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filtered, key = { it.phone + it.name }) { item ->
-                                RegisteredAllCard(
-                                    item = item,
-                                    onOpenChat = { viewModel.openWhatsAppChat(item.phone) }
+
+                        if (filtered.isEmpty()) {
+                            if (query.isNotEmpty()) {
+                                AppEmptyState(
+                                    icon = Icons.Outlined.SearchOff,
+                                    title = "لا توجد جهات اتصال مطابقة",
+                                    subtitle = "لم نعثر على أي جهة اتصال تطابق \"$query\".",
+                                    actionLabel = "مسح البحث",
+                                    onActionClick = { viewModel.updateSearchQuery("") }
                                 )
+                            } else {
+                                AppEmptyState(
+                                    icon = Icons.Outlined.PersonSearch,
+                                    title = "لا توجد جهات اتصال مسجلة",
+                                    subtitle = "تأكد من منح التطبيق صلاحية قراءة جهات الاتصال.",
+                                    actionLabel = "مزامنة جهات الاتصال",
+                                    onActionClick = { viewModel.refresh() }
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 80.dp)
+                            ) {
+                                items(filtered, key = { it.phone }) { item ->
+                                    RegisteredAllCard(
+                                        item = item,
+                                        onOpenChat = { viewModel.openWhatsAppChat(item.phone) }
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                ChatsHubTab.REGISTERED_TODAY -> {
-                    val filtered = uiState.registeredTodayList.filter {
-                        query.isEmpty() || it.name.lowercase().contains(query) || it.phone.contains(query)
-                    }
-
-                    if (filtered.isEmpty()) {
-                        if (query.isNotEmpty()) {
-                            EmptyHubState(
-                                icon = Icons.Outlined.SearchOff,
-                                title = "لا توجد تسجيلات مطابقة للبحث",
-                                subtitle = "لم يتم العثور على تسجيلات تطابق \"$query\".",
-                                ctaText = "مسح البحث 🔍",
-                                ctaIcon = Icons.Filled.Close,
-                                onCtaClick = { viewModel.updateSearchQuery("") }
-                            )
-                        } else {
-                            EmptyHubState(
-                                icon = Icons.Outlined.HourglassEmpty,
-                                title = "لا توجد تسجيلات خلال آخر 24 ساعة",
-                                subtitle = "أي جهة اتصال جديدة يتم تسجيلها آلياً ستظهر هنا لمدة 24 ساعة.",
-                                ctaText = "تحديث القائمة 🔄",
-                                ctaIcon = Icons.Filled.Refresh,
-                                onCtaClick = { viewModel.refresh() }
-                            )
+                    ChatsHubTab.REGISTERED_TODAY -> {
+                        val filtered = uiState.registeredTodayList.filter {
+                            query.isEmpty() || it.name.lowercase().contains(query) || it.phone.contains(query)
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filtered, key = { it.phone + it.savedAt }) { item ->
-                                RegisteredTodayCard(
-                                    item = item,
-                                    onOpenChat = { viewModel.openWhatsAppChat(item.phone) }
+
+                        if (filtered.isEmpty()) {
+                            if (query.isNotEmpty()) {
+                                AppEmptyState(
+                                    icon = Icons.Outlined.SearchOff,
+                                    title = "لا توجد نتائج مطابقة",
+                                    subtitle = "لم نعثر على أي جهة مسجلة اليوم تطابق \"$query\".",
+                                    actionLabel = "مسح البحث",
+                                    onActionClick = { viewModel.updateSearchQuery("") }
                                 )
+                            } else {
+                                AppEmptyState(
+                                    icon = Icons.Outlined.PersonAdd,
+                                    title = "لم يتم حفظ أي جهات اتصال اليوم",
+                                    subtitle = "الأرقام الجديدة التي يتم حفظها تلقائياً اليوم ستظهر هنا فور تسجيلها.",
+                                    actionLabel = "تحديث القائمة",
+                                    onActionClick = { viewModel.refresh() }
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 80.dp)
+                            ) {
+                                items(filtered, key = { it.phone }) { item ->
+                                    RegisteredTodayCard(
+                                        item = item,
+                                        onOpenChat = { viewModel.openWhatsAppChat(item.phone) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -462,666 +432,21 @@ fun ChatsHubScreen(
         }
     }
 
-    // نافذة استعراض كافة الرسائل المحذوفة
     if (showDeletedDialog) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showDeletedDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                BentoCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.85f),
-                    borderBrush = ObsidianGlowBorder.Cyan
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "الرسائل المحذوفة لدى الجميع 🗑️",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            IconButton(onClick = { showDeletedDialog = false }) {
-                                Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = TextMuted)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        if (uiState.deletedMessages.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("لا توجد رسائل محذوفة حالياً 🟢", color = TextSecondary, fontSize = 13.sp)
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(uiState.deletedMessages) { item ->
-                                    BentoCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        borderBrush = ObsidianGlowBorder.Amber
-                                    ) {
-                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(
-                                                    text = item.senderName.ifBlank { item.senderPhone },
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = TextPrimary
-                                                )
-                                                Text(
-                                                    text = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(item.timestamp)),
-                                                    fontSize = 11.sp,
-                                                    color = TextMuted
-                                                )
-                                            }
-                                            Text(
-                                                text = item.originalText ?: "رسالة محذوفة",
-                                                fontSize = 12.sp,
-                                                color = Color(0xFFE11D48)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        DeletedMessagesDialog(
+            deletedMessages = uiState.deletedMessages,
+            onDismiss = { showDeletedDialog = false }
+        )
     }
 
-    // نافذة استعراض وسائط الخزينة والعرض لمرة واحدة
     if (showMediaDialog) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showMediaDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                BentoCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.85f),
-                    borderBrush = ObsidianGlowBorder.Emerald
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "وسائط الخزينة والعرض لمرة واحدة 🔒",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            IconButton(onClick = { showMediaDialog = false }) {
-                                Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = TextMuted)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        if (uiState.vaultMediaItems.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("لا توجد وسائط محفوظة حالياً 🔒", color = TextSecondary, fontSize = 13.sp)
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(uiState.vaultMediaItems) { item ->
-                                    BentoCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        borderBrush = ObsidianGlowBorder.Emerald
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                        .background(WhatsAppGreen.copy(alpha = 0.15f)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = when (item.mediaType) {
-                                                            com.whatsup.automation.domain.model.VaultMediaType.IMAGE -> Icons.Default.Image
-                                                            com.whatsup.automation.domain.model.VaultMediaType.VIDEO -> Icons.Default.Videocam
-                                                            com.whatsup.automation.domain.model.VaultMediaType.AUDIO -> Icons.Default.Mic
-                                                            else -> Icons.Default.InsertDriveFile
-                                                        },
-                                                        contentDescription = null,
-                                                        tint = WhatsAppGreen,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-                                                Column {
-                                                    Text(
-                                                        text = item.senderName.ifBlank { item.senderPhone },
-                                                        fontSize = 13.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = TextPrimary
-                                                    )
-                                                    Text(
-                                                        text = "عرض لمرة واحدة • ${java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(item.timestamp))}",
-                                                        fontSize = 10.5.sp,
-                                                        color = TextMuted
-                                                    )
-                                                }
-                                            }
-
-                                            if (!item.localFilePath.isNullOrBlank()) {
-                                                Button(
-                                                    onClick = {
-                                                        val file = java.io.File(item.localFilePath)
-                                                        if (file.exists()) {
-                                                            try {
-                                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                                                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                                                                        context,
-                                                                        "${context.packageName}.fileprovider",
-                                                                        file
-                                                                    )
-                                                                    setDataAndType(uri, item.mimeType ?: "image/*")
-                                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                                }
-                                                                context.startActivity(intent)
-                                                            } catch (_: Exception) {}
-                                                        }
-                                                    },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                                ) {
-                                                    Text("فتح 👁️", fontSize = 11.sp, color = DarkBgPrimary, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        ViewOnceVaultDialog(
+            mediaVaultItems = uiState.vaultMediaItems,
+            onDismiss = { showMediaDialog = false },
+            onOpenMedia = {
+                showMediaDialog = false
+                onNavigateToVault()
             }
-        }
-    }
-}
-}
-
-/**
- * بطاقة جهة اتصال غير مسجلة (مع زر الدخول للمحادثة المباشر).
- */
-@Composable
-private fun UnregisteredCard(
-    item: UnregisteredContactItem,
-    onOpenChat: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-
-    BentoCard(
-        modifier = Modifier.fillMaxWidth(),
-        borderBrush = ObsidianGlowBorder.Amber
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(AmberWarning.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PersonOutline,
-                            contentDescription = null,
-                            tint = AmberWarning,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = item.phone,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
-                        )
-                        Text(
-                            text = "غير مسجل في الهاتف",
-                            fontSize = 11.sp,
-                            color = AmberWarning
-                        )
-                    }
-                }
-
-                // وقت وصول الرسالة (مؤقت 24 ساعة)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(GlassFill)
-                        .border(1.dp, GlassBorder, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = item.timeAgoFormatted,
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
-                }
-            }
-
-            // نص الرسالة الواردة
-            if (item.lastMessage.isNotBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFF1F5F9))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = item.lastMessage,
-                        fontSize = 13.sp,
-                        color = TextPrimary,
-                        maxLines = 3
-                    )
-                }
-            }
-
-            // زر الدخول الفوري للمحادثة في واتساب
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onOpenChat()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Chat,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "الدخول للمحادثة في واتساب",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * بطاقة جهة اتصال مسجلة فعلياً.
- */
-@Composable
-private fun RegisteredAllCard(
-    item: RegisteredContactItem,
-    onOpenChat: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-
-    BentoCard(
-        modifier = Modifier.fillMaxWidth(),
-        borderBrush = ObsidianGlowBorder.Emerald
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(WhatsAppGreen.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = WhatsAppGreen,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text(
-                        text = item.name,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = item.phone,
-                        fontSize = 12.sp,
-                        color = TextMuted,
-                        style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onOpenChat()
-                },
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(WhatsAppGreen.copy(alpha = 0.2f))
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Chat,
-                    contentDescription = "مراسلة",
-                    tint = WhatsAppGreen,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * بطاقة جهة اتصال تم تسجيلها اليوم (مع مؤقت 24 ساعة).
- */
-@Composable
-private fun RegisteredTodayCard(
-    item: RegisteredTodayItem,
-    onOpenChat: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-
-    BentoCard(
-        modifier = Modifier.fillMaxWidth(),
-        borderBrush = ObsidianGlowBorder.Purple
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(NeonPurple.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PersonAdd,
-                            contentDescription = null,
-                            tint = NeonPurple,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = item.name,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = item.phone,
-                            fontSize = 12.sp,
-                            color = TextMuted,
-                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
-                        )
-                    }
-                }
-
-                // شارة مؤقت الـ 24 ساعة
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(NeonPurple.copy(alpha = 0.15f))
-                        .border(1.dp, NeonPurple.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Timer,
-                            contentDescription = null,
-                            tint = NeonPurple,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = "متبقي ${item.hoursRemaining}h",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = NeonPurple
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "سُجل: ${item.timeAgoFormatted}",
-                    fontSize = 11.sp,
-                    color = TextSecondary
-                )
-
-                Button(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenChat()
-                    },
-                    modifier = Modifier.height(34.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonPurple.copy(alpha = 0.25f))
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Chat,
-                            contentDescription = null,
-                            tint = NeonPurple,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "مراسلة",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * شاشة الحالة الفارغة مع دعم أزرار الإجراء المباشر (Empty State with Actionable CTA).
- */
-@Composable
-private fun EmptyHubState(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    ctaText: String? = null,
-    ctaIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    onCtaClick: (() -> Unit)? = null
-) {
-    val haptic = LocalHapticFeedback.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 32.dp, bottom = 24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(horizontal = 24.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(68.dp)
-                    .clip(CircleShape)
-                    .background(GlassFill)
-                    .border(1.dp, GlassBorder, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = WhatsAppGreen,
-                    modifier = Modifier.size(34.dp)
-                )
-            }
-
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-
-            Text(
-                text = subtitle,
-                fontSize = 12.sp,
-                color = TextSecondary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-
-            if (ctaText != null && onCtaClick != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Button(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onCtaClick()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = WhatsAppGreen,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-                    modifier = Modifier.heightIn(min = 48.dp) // Touch target >= 48dp
-                ) {
-                    if (ctaIcon != null) {
-                        Icon(ctaIcon, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                    Text(text = ctaText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
+        )
     }
 }

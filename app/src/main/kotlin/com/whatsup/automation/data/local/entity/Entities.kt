@@ -53,7 +53,8 @@ data class LogEntity(
         Index(value = ["timestamp"]),
         Index(value = ["senderPhone"]),
         Index(value = ["isViewed"]),
-        Index(value = ["isReacted"])
+        Index(value = ["isReacted"]),
+        Index(value = ["isSaved"])
     ]
 )
 data class StatusEntity(
@@ -74,7 +75,10 @@ data class StatusEntity(
     val isFavorite: Boolean = false,
     val isMuted: Boolean = false,
     val isDeleted: Boolean = false,
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    val isSaved: Boolean = false,
+    val savedFilePath: String? = null,
+    val savedAt: Long? = null
 )
 
 /**

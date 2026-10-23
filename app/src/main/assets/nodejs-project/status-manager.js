@@ -10,7 +10,9 @@
  */
 
 import fs from 'fs';
-import { jidNormalizedUser } from '@whiskeysockets/baileys';
+import path from 'path';
+import { jidNormalizedUser, downloadContentFromMessage, downloadMediaMessage } from '@whiskeysockets/baileys';
+import { downloadAndDecryptMedia } from './media-downloader.js';
 import { CONFIG, getStatusKeysFilePath, sentMessagesCache, rawMessagesCache } from './config.js';
 import { emitToAndroid } from './bridge.js';
 import { resolvePhoneAndLid, getLidForPhone, isLidJidOrNumber, getContactName } from './lid-resolver.js';
@@ -115,7 +117,8 @@ export async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH
         id: statusId,
         participant: msg.key.participant || senderJid,
         fromMe: msg.key.fromMe || false,
-        pushName: msg.pushName || ''
+        pushName: msg.pushName || '',
+        rawMessage: msg.message
     });
 
     // Retain at most MAX_STATUS_KEYS entries
@@ -147,6 +150,33 @@ export async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH
 
     const senderName = msg.pushName || getContactName(resolvedPhone) || getContactName(cleanRawPhone) || '';
 
+    let mediaUrl = null;
+    if (mediaType !== 'TEXT') {
+        const mediaObj = msg.message.imageMessage || msg.message.videoMessage;
+        const mediaTypeLower = mediaType === 'IMAGE' ? 'image' : 'video';
+        const ext = mediaType === 'VIDEO' ? 'mp4' : 'jpg';
+        const statusMediaDir = path.join(authFolder, '..', 'statuses_media');
+        try {
+            if (!fs.existsSync(statusMediaDir)) fs.mkdirSync(statusMediaDir, { recursive: true });
+        } catch (_) {}
+        const localFilePath = path.join(statusMediaDir, `status_${statusId}.${ext}`);
+
+        if (fs.existsSync(localFilePath) && fs.statSync(localFilePath).size > 0) {
+            mediaUrl = localFilePath;
+        } else if (mediaObj) {
+            try {
+                const buffer = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock, msg);
+                if (buffer && buffer.length > 0) {
+                    fs.writeFileSync(localFilePath, buffer);
+                    mediaUrl = localFilePath;
+                    console.log(`[STATUS] Successfully downloaded media for status ${statusId}: ${localFilePath} (${buffer.length} bytes)`);
+                }
+            } catch (err) {
+                console.warn(`[STATUS] Failed to download status media for ${statusId}: ${err.message}`);
+            }
+        }
+    }
+
     emitToAndroid('INCOMING_STATUS', {
         id: statusId,
         senderPhone: resolvedPhone,
@@ -156,9 +186,52 @@ export async function processStatusMessage(msg, authFolder = CONFIG.DEFAULT_AUTH
         isLid: resolved.isLid,
         mediaType,
         textContent: text,
+        mediaUrl: mediaUrl,
         timestamp: ts,
         participant: msg.key.participant || senderJid
     });
+}
+
+/**
+ * Downloads status media on demand.
+ */
+export async function downloadStatusMedia(sock, statusId, authFolder = CONFIG.DEFAULT_AUTH_FOLDER) {
+    if (!statusId) return null;
+    let cachedMsg = rawMessagesCache.get(statusId);
+    let storedEntry = statusKeysMap.get(statusId);
+    if (!cachedMsg && storedEntry?.rawMessage) {
+        cachedMsg = storedEntry.rawMessage;
+    }
+    const mediaObj = cachedMsg?.imageMessage || cachedMsg?.videoMessage;
+    const mediaTypeLower = cachedMsg?.imageMessage ? 'image' : (cachedMsg?.videoMessage ? 'video' : null);
+    if (!mediaObj || !mediaTypeLower) return null;
+
+    const ext = mediaTypeLower === 'video' ? 'mp4' : 'jpg';
+    const statusMediaDir = path.join(authFolder, '..', 'statuses_media');
+    try {
+        if (!fs.existsSync(statusMediaDir)) fs.mkdirSync(statusMediaDir, { recursive: true });
+    } catch (_) {}
+    const localFilePath = path.join(statusMediaDir, `status_${statusId}.${ext}`);
+
+    if (fs.existsSync(localFilePath) && fs.statSync(localFilePath).size > 0) {
+        return localFilePath;
+    }
+
+    try {
+        const syntheticMsg = {
+            key: { id: statusId, remoteJid: 'status@broadcast', participant: storedEntry?.participant },
+            message: cachedMsg
+        };
+        const buffer = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock, syntheticMsg);
+        if (buffer && buffer.length > 0) {
+            fs.writeFileSync(localFilePath, buffer);
+            console.log(`[STATUS] On-demand downloaded media for status ${statusId}: ${localFilePath} (${buffer.length} bytes)`);
+            return localFilePath;
+        }
+    } catch (err) {
+        console.warn(`[STATUS] downloadStatusMedia failed for ${statusId}: ${err.message}`);
+    }
+    return null;
 }
 
 /**
@@ -299,9 +372,13 @@ export async function reactStatus(sock, statusId, emoji = '💚', senderPhone = 
             console.error(`[reactStatus] sendReceipt failed: ${receiptErr?.message || receiptErr}`);
         }
 
-        try {
-            await sock.readMessages([reactionKey]);
-        } catch (_) {}
+        // Keep status unread on user's primary phone (circle remains green in official WhatsApp):
+        // sock.readMessages is NOT called unless syncReadToSelf is explicitly requested.
+        if (options && options.syncReadToSelf === true) {
+            try {
+                await sock.readMessages([reactionKey]);
+            } catch (_) {}
+        }
 
         recordStage(statusId, 'REACTION_BUILD', 'status-manager.js', 'reactStatus', {
             statusId,

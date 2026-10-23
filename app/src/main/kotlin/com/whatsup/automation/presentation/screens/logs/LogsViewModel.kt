@@ -264,7 +264,6 @@ class LogsViewModel @Inject constructor(
             is ConnectionState.Error -> "Error: ${s.message}"
         }
         val isNotifEnabled = ServicePermissionManager.isNotificationListenerEnabled(context)
-        val isAccessEnabled = ServicePermissionManager.isAccessibilityServiceEnabled(context)
         val isBatteryIgnored = ServicePermissionManager.isBatteryOptimizationIgnored(context)
         val hasContacts = ServicePermissionManager.hasContactsPermissions(context)
         val sessionPhone = sessionKeystore.getSessionPhone() ?: "غير محدد"
@@ -302,7 +301,6 @@ class LogsViewModel @Inject constructor(
 • Notification Listener Service: ${if (isNotifEnabled) "ACTIVE ✅" else "DISABLED ❌"}
 • Battery Optimization Ignored (Doze Immunity): ${if (isBatteryIgnored) "YES ✅" else "NO ❌"}
 • Contacts Permission (Read/Write): ${if (hasContacts) "GRANTED ✅" else "DENIED ❌"}
-• Accessibility Service (Hybrid): ${if (isAccessEnabled) "ACTIVE ✅" else "DISABLED ⚠️"}
 
 📊 [DATABASE ACTIVITY SUMMARY]
 • Total Records: ${currentLogs.size}

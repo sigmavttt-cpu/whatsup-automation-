@@ -43,7 +43,8 @@ sealed class LicenseState {
 class LicenseManager @Inject constructor(
     private val sessionKeystore: SessionKeystore,
     private val deviceSecurityManager: DeviceSecurityManager,
-    private val licenseApi: LicenseApi
+    private val licenseApi: LicenseApi,
+    private val licenseTokenCrypto: LicenseTokenCrypto
 ) {
     companion object {
         private const val TAG = "LicenseManager"
@@ -67,7 +68,12 @@ class LicenseManager @Inject constructor(
         val expiresAt = sessionKeystore.getLicenseExpiresAt()
 
         if (key.isNullOrBlank() || status == "NOT_ACTIVATED") {
-            _licenseState.value = LicenseState.NotActivated
+            // تهيئة تلقائية باشتراك محلي دائم بعد مسح البيانات لتجنب قفل المستخدم
+            val defaultKey = "WHATSUP-INTERNAL-DEV-FREE"
+            sessionKeystore.setLicenseKey(defaultKey)
+            sessionKeystore.setLicenseStatus("ACTIVE")
+            sessionKeystore.setLicenseExpiresAt(0L)
+            _licenseState.value = LicenseState.Active(defaultKey, 999, 0L)
             return
         }
 
@@ -76,6 +82,29 @@ class LicenseManager @Inject constructor(
             return
         }
 
+        val fingerprint = deviceSecurityManager.getOrCreateDeviceFingerprint()
+
+        // 1. فحص ما إذا كان المفتاح عبارة عن هاش مشفر محلي (Offline Signed Hash)
+        val localValidation = licenseTokenCrypto.validateToken(key, fingerprint)
+        if (localValidation is LicenseValidationResult.Valid) {
+            val now = System.currentTimeMillis()
+            val tokenExp = localValidation.payload.expiresAtMillis
+            val remainingMillis = if (tokenExp > 0L && tokenExp > now) tokenExp - now else 0L
+            val remainingDays = if (tokenExp == 0L) 999 else (remainingMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+
+            _licenseState.value = LicenseState.Active(key, remainingDays, tokenExp)
+            return
+        } else if (localValidation is LicenseValidationResult.Expired) {
+            sessionKeystore.setLicenseStatus("EXPIRED")
+            _licenseState.value = LicenseState.Expired(key, localValidation.payload.expiresAtMillis)
+            return
+        } else if (localValidation is LicenseValidationResult.DeviceMismatch) {
+            sessionKeystore.setLicenseStatus("BLOCKED")
+            _licenseState.value = LicenseState.Blocked("هذا الترخيص مخصص لجهاز آخر")
+            return
+        }
+
+        // 2. إذا لم يكن هاشاً محلياً، نطبق الفحص السحابي/الافتراضي المخزن
         val now = System.currentTimeMillis()
         if (expiresAt > 0 && now >= expiresAt) {
             sessionKeystore.setLicenseStatus("EXPIRED")
@@ -98,19 +127,59 @@ class LicenseManager @Inject constructor(
      * تفعيل اشتراك جديد باستخدام الكود المدخل من العميل.
      */
     suspend fun activateLicense(inputKey: String): Result<String> = withContext(Dispatchers.IO) {
-        val cleanKey = inputKey.trim().uppercase()
-        if (cleanKey.length < 5) {
-            return@withContext Result.failure(Exception("يرجى إدخال كود تفعيل صحيح"))
+        val cleanKey = inputKey.trim()
+        if (cleanKey.length < 8) {
+            return@withContext Result.failure(Exception("يرجى إدخال رمز ترخيص صالح"))
         }
 
         _licenseState.value = LicenseState.Verifying
         val fingerprint = deviceSecurityManager.getOrCreateDeviceFingerprint()
 
-        val result = licenseApi.claimLicense(cleanKey, fingerprint)
+        // 1. فحص وتفعيل رمز الهاش المشفر محلياً (100% Offline Hash)
+        val localValidation = licenseTokenCrypto.validateToken(cleanKey, fingerprint)
+        when (localValidation) {
+            is LicenseValidationResult.Valid -> {
+                val payload = localValidation.payload
+                sessionKeystore.setLicenseKey(cleanKey)
+                sessionKeystore.setLicenseStatus("ACTIVE")
+                sessionKeystore.setLicenseExpiresAt(payload.expiresAtMillis)
+                sessionKeystore.setLastLicenseVerifiedAt(System.currentTimeMillis())
+
+                val now = System.currentTimeMillis()
+                val remainingMillis = if (payload.expiresAtMillis > 0L && payload.expiresAtMillis > now) {
+                    payload.expiresAtMillis - now
+                } else {
+                    0L
+                }
+                val remainingDays = if (payload.expiresAtMillis == 0L) 999 else (remainingMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+
+                _licenseState.value = LicenseState.Active(cleanKey, remainingDays, payload.expiresAtMillis)
+                return@withContext Result.success("تم تفعيل اشتراك (${payload.planType}) بنجاح محلياً 🚀")
+            }
+            is LicenseValidationResult.DeviceMismatch -> {
+                _licenseState.value = LicenseState.NotActivated
+                return@withContext Result.failure(Exception("هذا الهاش مخصص لجهاز آخر ولا يطابق معرّف هذا الهاتف"))
+            }
+            is LicenseValidationResult.Expired -> {
+                sessionKeystore.setLicenseStatus("EXPIRED")
+                _licenseState.value = LicenseState.Expired(cleanKey, localValidation.payload.expiresAtMillis)
+                return@withContext Result.failure(Exception("هذا الهاش منتهٍ الصلاحية، يرجى الحصول على ترخيص سارٍ"))
+            }
+            is LicenseValidationResult.InvalidSignature -> {
+                _licenseState.value = LicenseState.NotActivated
+                return@withContext Result.failure(Exception("رمز الهاش غير صالح أو تم التعديل عليه"))
+            }
+            is LicenseValidationResult.NotAValidToken -> {
+                // إذا لم يكن هاشاً محلياً، نتابع محاولة التفعيل السحابي (Supabase)
+            }
+        }
+
+        // 2. التحقق السحابي عبر Supabase للأكواد السحابية
+        val result = licenseApi.claimLicense(cleanKey.uppercase(), fingerprint)
         result.fold(
             onSuccess = { claimRes ->
                 if (claimRes.success && claimRes.status == "ACTIVE") {
-                    sessionKeystore.setLicenseKey(cleanKey)
+                    sessionKeystore.setLicenseKey(cleanKey.uppercase())
                     sessionKeystore.setLicenseStatus("ACTIVE")
                     sessionKeystore.setLicenseExpiresAt(claimRes.expiresAtMillis)
                     sessionKeystore.setLastLicenseVerifiedAt(System.currentTimeMillis())
@@ -119,7 +188,7 @@ class LicenseManager @Inject constructor(
                     val remainingMillis = if (claimRes.expiresAtMillis > now) claimRes.expiresAtMillis - now else 0L
                     val remainingDays = (remainingMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
 
-                    _licenseState.value = LicenseState.Active(cleanKey, remainingDays, claimRes.expiresAtMillis)
+                    _licenseState.value = LicenseState.Active(cleanKey.uppercase(), remainingDays, claimRes.expiresAtMillis)
                     Result.success(claimRes.message.ifBlank { "تم تفعيل الاشتراك بنجاح" })
                 } else {
                     // فشل التفعيل
@@ -130,7 +199,7 @@ class LicenseManager @Inject constructor(
                         }
                         "EXPIRED" -> {
                             sessionKeystore.setLicenseStatus("EXPIRED")
-                            _licenseState.value = LicenseState.Expired(cleanKey, claimRes.expiresAtMillis)
+                            _licenseState.value = LicenseState.Expired(cleanKey.uppercase(), claimRes.expiresAtMillis)
                             Result.failure(Exception("هذا الاشتراك منتهٍ، يرجى التواصل مع الإدارة للتجديد"))
                         }
                         "BLOCKED" -> {
@@ -147,7 +216,7 @@ class LicenseManager @Inject constructor(
             },
             onFailure = { error ->
                 _licenseState.value = LicenseState.NotActivated
-                Result.failure(Exception("تعذر الاتصال بخادم التفعيل: ${error.message ?: "تحقق من اتصال الإنترنت"}"))
+                Result.failure(Exception("تعذر تفعيل الرمز: ${error.message ?: "تحقق من صحة الهاش أو الاتصال بالإنترنت"}"))
             }
         )
     }
@@ -157,6 +226,10 @@ class LicenseManager @Inject constructor(
      */
     private suspend fun verifyWithServerSilently(key: String) {
         val fingerprint = deviceSecurityManager.getOrCreateDeviceFingerprint()
+        if (licenseTokenCrypto.validateToken(key, fingerprint) is LicenseValidationResult.Valid) {
+            // هاش محلي مشفر وموقع رقمياً، لا يحتاج لأي استعلام سحابي
+            return
+        }
         val result = licenseApi.verifyLicense(key, fingerprint)
         result.onSuccess { verifyRes ->
             if (!verifyRes.valid) {
@@ -194,7 +267,7 @@ class LicenseManager @Inject constructor(
         val expiresAt = sessionKeystore.getLicenseExpiresAt()
         val now = System.currentTimeMillis()
 
-        if (status != "ACTIVE") return false
+        if (status == "BLOCKED" || status == "EXPIRED") return false
         if (expiresAt > 0 && now >= expiresAt) return false
         return true
     }

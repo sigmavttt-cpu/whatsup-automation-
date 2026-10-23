@@ -26,7 +26,7 @@ import com.whatsup.automation.data.local.entity.RuleEntity
         com.whatsup.automation.data.local.entity.OutboxMessageEntity::class,
         com.whatsup.automation.data.local.entity.VaultMediaEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -123,34 +123,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE statuses ADD COLUMN isSaved INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE statuses ADD COLUMN savedFilePath TEXT")
+                db.execSQL("ALTER TABLE statuses ADD COLUMN savedAt INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_statuses_isSaved ON statuses (isSaved)")
+            }
+        }
+
         /**
-         * إنشاء callback لتزويد قاعدة البيانات بالبيانات الأولية (القواعد الافتراضية).
+         * إنشاء callback لقاعدة البيانات (تهيئة وتنظيف الجداول).
          */
         fun createCallback(): Callback {
             return object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    // القاعدة 1: الرد على التحية والسلام
-                    db.execSQL("""
-                        INSERT INTO rules (name, description, patternType, patternValue, actionsJson, priority, isEnabled, createdAt)
-                        VALUES (
-                            'الرد على التحية والسلام',
-                            'الرد بقرعة ترحيبية مهذبة عند استقبال عبارات السلام والتحية',
-                            'CONTAINS',
-                            'سلام, السلام عليكم, مرحبا, هلا, مساء الخير, صباح الخير',
-                            '[{"type":"SEND_REPLY","message":"وعليكم السلام ورحمة الله وبركاته 🌹
-أهلاً وسهلاً بك، تفضل كيف أقدر أساعدك؟
-حياك الله أخي الكريم ✨"}]',
-                            1,
-                            1,
-                            ${System.currentTimeMillis()}
-                        )
-                    """.trimIndent())
+                    // تم إيقاف أي حقن تلقائي لقواعد الرد؛ التطبيق يعتمد على حفظ جهات الاتصال،
+                    // والردود التلقائية يحددها المستخدم بنفسه متى شاء عبر واجهة القواعد.
                 }
 
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     db.execSQL("DELETE FROM activity_logs WHERE status = 'NO_MATCH' OR actionExecuted LIKE '%تجاهل%' OR senderPhone = 'null' OR senderPhone = '' OR senderPhone LIKE '%lid%'")
+                    // تطهير القواعد الافتراضية القديمة من أجهزة المستخدمين لمنع أي ردود مزعجة أو محرجة
+                    db.execSQL("DELETE FROM rules WHERE name = 'الرد على التحية والسلام' OR patternValue LIKE '%هلا%'")
                 }
             }
         }

@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,37 +21,29 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import com.whatsup.automation.domain.model.ActivityLog
 import com.whatsup.automation.domain.model.LogStatus
-import com.whatsup.automation.presentation.components.GlassmorphicCard
-import com.whatsup.automation.presentation.theme.*
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-
-import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.components.AppScreenHeader
+import com.whatsup.automation.presentation.components.AppTooltipBox
 import com.whatsup.automation.presentation.components.BentoSkeletonList
-import com.whatsup.automation.presentation.theme.ObsidianGlowBorder
-
+import com.whatsup.automation.presentation.components.GlassmorphicCard
 import com.whatsup.automation.presentation.screens.logs.components.*
+import com.whatsup.automation.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen(
     viewModel: LogsViewModel,
+    showHeader: Boolean = true,
+    onOpenDrawer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -65,7 +55,7 @@ fun LogsScreen(
     uiState.selectedConversation?.let { conversation ->
         ConversationDetailDialog(
             conversation = conversation,
-            onDismiss = { viewModel.closeConversation() },
+            onDismiss = { viewModel.closeConversation() }
         )
     }
 
@@ -87,264 +77,54 @@ fun LogsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
         ) {
-            // شريط الرأس
+            // شريط الرأس القياسي
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "الإعدادات وسجل النشاط",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "درع الحماية، محاكي السلوك البشري، وسجلات العمليات الحية",
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // زر نسخ التقرير التشخيصي
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val report = viewModel.generateDiagnosticReport()
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("SIGMACODEX Diagnostic Report", report)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "تم نسخ التقرير التشخيصي إلى الحافظة بنجاح 📋", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(CyberCyan.copy(alpha = 0.15f))
-                        ) {
-                            Icon(Icons.Filled.Assessment, contentDescription = "نسخ التقرير التشخيصي", tint = CyberCyan)
-                        }
-
-                        // زر مسح السجل
-                        if (uiState.logs.isNotEmpty()) {
+                if (showHeader) {
+                    AppScreenHeader(
+                        title = "سجل العمليات والنشاط",
+                        subtitle = "درع الحماية وسجلات العمليات والأحداث الحية",
+                        onOpenDrawer = onOpenDrawer,
+                        actions = {
                             IconButton(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.clearAllLogs()
-                                    Toast.makeText(context, "تم مسح كافة السجلات", Toast.LENGTH_SHORT).show()
+                                    val report = viewModel.generateDiagnosticReport()
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("SIGMACODEX Diagnostic Report", report)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "تم نسخ التقرير التشخيصي بنجاح", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(RoseError.copy(alpha = 0.15f))
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(DarkSurfaceElevated)
+                                    .border(1.dp, GlassBorderSubtle, RoundedCornerShape(12.dp))
                             ) {
-                                Icon(Icons.Filled.DeleteSweep, contentDescription = "مسح السجل", tint = RoseError)
+                                Icon(Icons.Filled.ContentCopy, contentDescription = "نسخ التقرير", tint = CyberCyan, modifier = Modifier.size(20.dp))
                             }
                         }
-                    }
+                    )
                 }
             }
 
-            // بطاقة درع الحماية ومحاكي السلوك البشري (Anti-Ban Shield) في تبويب الإعدادات
+            // شريط إحصائيات السجل ومسح العمليات
             item {
-                val antiBan = uiState.antiBanSettings
-
-                BentoCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    borderBrush = ObsidianGlowBorder.Emerald
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f, fill = false),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(WhatsAppGreen.copy(alpha = 0.18f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Shield,
-                                        contentDescription = null,
-                                        tint = WhatsAppGreen,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "درع الحماية ومحاكي السلوك البشري",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        color = TextPrimary
-                                    )
-                                    Text(
-                                        text = "محاكاة القراءة والكتابة الطبيعية ومنع الحظر",
-                                        fontSize = 11.sp,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-
-                            Switch(
-                                checked = antiBan.isEnabled,
-                                onCheckedChange = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    viewModel.updateAntiBanSettings(antiBan.copy(isEnabled = it))
-                                },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = WhatsAppGreen,
-                                    uncheckedThumbColor = TextMuted,
-                                    uncheckedTrackColor = DarkBgSecondary
-                                )
-                            )
-                        }
-
-                        if (antiBan.isEnabled) {
-                            HorizontalDivider(color = Color(0x15FFFFFF))
-
-                            // خيار محاكاة القراءة
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("محاكاة قراءة الرسالة (Mark Read)", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-                                    Text("تأكيد القراءة ثم الانتظار لحظات قبل البدء بالكتابة", fontSize = 11.sp, color = TextSecondary)
-                                }
-                                Switch(
-                                    checked = antiBan.simulateReading,
-                                    onCheckedChange = {
-                                        viewModel.updateAntiBanSettings(antiBan.copy(simulateReading = it))
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = CyberCyan,
-                                        uncheckedThumbColor = TextMuted,
-                                        uncheckedTrackColor = DarkBgSecondary
-                                    )
-                                )
-                            }
-
-                            // خيار سرعة الكتابة المتناسبة
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("كتابة ديناميكية متناسبة مع طول النص", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-                                    Text("إظهار 'يكتب الآن...' لفترة تتطابق مع عدد حروف الرد", fontSize = 11.sp, color = TextSecondary)
-                                }
-                                Switch(
-                                    checked = antiBan.dynamicTypingSpeed,
-                                    onCheckedChange = {
-                                        viewModel.updateAntiBanSettings(antiBan.copy(dynamicTypingSpeed = it))
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = CyberCyan,
-                                        uncheckedThumbColor = TextMuted,
-                                        uncheckedTrackColor = DarkBgSecondary
-                                    )
-                                )
-                            }
-
-                            HorizontalDivider(color = Color(0x10FFFFFF))
-
-                            // منزلق فترة التهدئة بين الردود
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("فترة التهدئة بين الردود لنفس الرقم:", fontSize = 12.sp, color = TextSecondary)
-                                    Text("${antiBan.contactCooldownSeconds} ثانية", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WhatsAppGreen)
-                                }
-                                Slider(
-                                    value = antiBan.contactCooldownSeconds.toFloat(),
-                                    onValueChange = {
-                                        viewModel.updateAntiBanSettings(antiBan.copy(contactCooldownSeconds = it.toInt()))
-                                    },
-                                    valueRange = 5f..60f,
-                                    steps = 10,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = WhatsAppGreen,
-                                        activeTrackColor = WhatsAppGreen,
-                                        inactiveTrackColor = Color(0x22FFFFFF)
-                                    )
-                                )
-                            }
-
-                            // منزلق سقف الردود لمنع الحلقات
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("أقصى عدد ردود لنفس الرقم خلال 10 دقائق:", fontSize = 12.sp, color = TextSecondary)
-                                    Text("${antiBan.maxRepliesPerWindow} ردود", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NeonPurple)
-                                }
-                                Slider(
-                                    value = antiBan.maxRepliesPerWindow.toFloat(),
-                                    onValueChange = {
-                                        viewModel.updateAntiBanSettings(antiBan.copy(maxRepliesPerWindow = it.toInt()))
-                                    },
-                                    valueRange = 1f..10f,
-                                    steps = 8,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = NeonPurple,
-                                        activeTrackColor = NeonPurple,
-                                        inactiveTrackColor = Color(0x22FFFFFF)
-                                    )
-                                )
-                            }
-
-                            // شارة الحالة
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(WhatsAppGreen.copy(alpha = 0.1f))
-                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.CheckCircle,
-                                        contentDescription = null,
-                                        tint = WhatsAppGreen,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "الدرع مفعّل: محصن ضد الحظر والحلقات اللانهائية",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = WhatsAppGreen
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                LogsStatsBar(
+                    totalLogsCount = uiState.logs.size,
+                    onGenerateReport = { viewModel.generateDiagnosticReport() },
+                    onClearAllLogs = { viewModel.clearAllLogs() }
+                )
             }
 
-            // شريط التبويبات الثلاثية
+            // بطاقة درع الحماية ومحاكي السلوك البشري (Anti-Ban Shield)
+            item {
+                AntiBanCard(
+                    antiBan = uiState.antiBanSettings,
+                    onUpdateAntiBan = { viewModel.updateAntiBanSettings(it) }
+                )
+            }
+
+            // شريط التبويبات الثلاثية النظيفة بدون إيموجي
             item {
                 Row(
                     modifier = Modifier
@@ -356,8 +136,8 @@ fun LogsScreen(
                 ) {
                     // 1. تبويب المحادثات
                     val isConv = uiState.selectedTab == LogsTab.CONVERSATIONS
-                    com.whatsup.automation.presentation.components.AppTooltipBox(
-                        tooltipText = "سجل المحادثات المجمعة والرسائل المتبادلة والردود (${uiState.conversations.size})",
+                    AppTooltipBox(
+                        tooltipText = "سجل المحادثات المجمعة والرسائل المتبادلة (${uiState.conversations.size})",
                         modifier = Modifier.weight(1f)
                     ) {
                         Box(
@@ -374,7 +154,7 @@ fun LogsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "المحادثات 💬 (${uiState.conversations.size})",
+                                text = "المحادثات (${uiState.conversations.size})",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                                 color = if (isConv) Color.White else TextSecondary,
@@ -386,8 +166,8 @@ fun LogsScreen(
 
                     // 2. تبويب سجل العمليات
                     val isRaw = uiState.selectedTab == LogsTab.RAW_LOGS
-                    com.whatsup.automation.presentation.components.AppTooltipBox(
-                        tooltipText = "سجل النشاط التفصيلي لكافة عمليات الرد والحفظ والربط (${uiState.logs.size})",
+                    AppTooltipBox(
+                        tooltipText = "سجل النشاط التفصيلي لكافة العمليات (${uiState.logs.size})",
                         modifier = Modifier.weight(1f)
                     ) {
                         Box(
@@ -404,7 +184,7 @@ fun LogsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "سجل النشاط 📋 (${uiState.logs.size})",
+                                text = "سجل النشاط (${uiState.logs.size})",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                                 color = if (isRaw) Color.White else TextSecondary,
@@ -416,8 +196,8 @@ fun LogsScreen(
 
                     // 3. تبويب تشخيص المحرك
                     val isDiag = uiState.selectedTab == LogsTab.SYSTEM_DIAGNOSTICS
-                    com.whatsup.automation.presentation.components.AppTooltipBox(
-                        tooltipText = "شاشة تشخيص المحرك ومؤشرات الذاكرة والشبكة وحالة Node.js",
+                    AppTooltipBox(
+                        tooltipText = "شاشة تشخيص المحرك ومؤشرات الذاكرة والشبكة",
                         modifier = Modifier.weight(1f)
                     ) {
                         Box(
@@ -434,7 +214,7 @@ fun LogsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "التشخيص ⚙️",
+                                text = "التشخيص",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                                 color = if (isDiag) Color.White else TextSecondary,
@@ -502,7 +282,7 @@ fun LogsScreen(
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            Icons.Filled.Forum,
+                                            imageVector = Icons.Filled.Forum,
                                             contentDescription = null,
                                             tint = TextMuted,
                                             modifier = Modifier.size(48.dp)
@@ -537,7 +317,6 @@ fun LogsScreen(
                 }
 
                 LogsTab.RAW_LOGS -> {
-                    // فلاتر الحالة لسجل النشاط
                     item {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
@@ -611,59 +390,10 @@ fun LogsScreen(
 
                 LogsTab.SYSTEM_DIAGNOSTICS -> {
                     item {
-                        GlassmorphicCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            cornerRadius = 16.dp,
-                            borderBrush = Brush.linearGradient(listOf(CyberCyan.copy(alpha = 0.4f), Color(0x10FFFFFF)))
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "سجل أحداث المحرك والجلسة (Live Engine)",
-                                        fontSize = 13.sp,
-                                        color = CyberCyan,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        "${uiState.engineDiagnostics.size} حدث",
-                                        fontSize = 10.sp,
-                                        color = TextMuted
-                                    )
-                                }
-                                HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
-                                if (uiState.engineDiagnostics.isEmpty()) {
-                                    Text(
-                                        "لا توجد أحداث مسجلة من المحرك حتى الآن.",
-                                        fontSize = 12.sp,
-                                        color = TextMuted
-                                    )
-                                } else {
-                                    uiState.engineDiagnostics.takeLast(40).reversed().forEach { line ->
-                                        val isError = line.contains("ERROR") || line.contains("Error")
-                                        val isSuccess = line.contains("Connected") || line.contains("SUCCESS")
-                                        Text(
-                                            text = line,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontSize = 11.sp,
-                                            color = when {
-                                                isError -> RoseError
-                                                isSuccess -> WhatsAppGreenLight
-                                                else -> TextSecondary
-                                            },
-                                            lineHeight = 16.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        LogsDiagnosticsCard(diagnostics = uiState.engineDiagnostics)
                     }
                 }
             }
         }
     }
 }
-

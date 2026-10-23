@@ -1,7 +1,10 @@
 package com.whatsup.automation.presentation.screens.statuses.components
 
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import androidx.compose.animation.*
+import androidx.core.content.FileProvider
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -49,19 +52,48 @@ fun StatusPreviewDialog(
     story: StatusStory,
     onDismiss: () -> Unit,
     onDownloadOrCopy: () -> Unit,
-    onReactClick: (String) -> Unit
+    onReactClick: (String) -> Unit,
+    onRequestDownload: ((String) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
 
-    val localBitmap = remember(story.mediaUrl) {
-        if (!story.mediaUrl.isNullOrBlank()) {
+    val localBitmap = remember(story.savedFilePath, story.mediaUrl) {
+        val path = story.savedFilePath ?: story.mediaUrl
+        if (!path.isNullOrBlank()) {
             try {
-                val f = File(story.mediaUrl)
-                if (f.exists() && f.length() > 0) BitmapFactory.decodeFile(f.absolutePath) else null
+                val f = File(path)
+                if (f.exists() && f.length() > 0) {
+                    if (story.mediaType == StatusMediaType.VIDEO) {
+                        try {
+                            val retriever = MediaMetadataRetriever()
+                            retriever.setDataSource(f.absolutePath)
+                            val frame = retriever.frameAtTime
+                            retriever.release()
+                            frame
+                        } catch (_: Exception) {
+                            null
+                        }
+                    } else {
+                        BitmapFactory.decodeFile(f.absolutePath)
+                    }
+                } else null
             } catch (_: Exception) {
                 null
             }
         } else null
+    }
+
+    var loadTimeout by remember { mutableStateOf(false) }
+
+    // طلب استدعاء تنزيل وسائط الحالة تلقائياً عند فتح المعاينة إذا لم تكن متوفرة
+    LaunchedEffect(story.id, story.mediaUrl) {
+        loadTimeout = false
+        val path = story.savedFilePath ?: story.mediaUrl
+        if ((path.isNullOrBlank() || !File(path).exists()) && story.mediaType != StatusMediaType.TEXT) {
+            onRequestDownload?.invoke(story.id)
+            kotlinx.coroutines.delay(4000L)
+            loadTimeout = true
+        }
     }
 
     // تدرجات لونية فاخرة للحالات النصية
@@ -81,24 +113,28 @@ fun StatusPreviewDialog(
         statusGradients[idx]
     }
 
-    // مؤقت شريط تقدم الحالة (الستوري) يبدأ من 0 حتى 100% ثم يختفي الحوار تلقائياً
-    // مدة العرض: 6 ثوانٍ للصور والنصوص، أو 15 ثانية لمقاطع الفيديو
+    // مؤقت شريط تقدم الحالة (الستوري) يبدأ من 0 حتى 100% مع دعم الإيقاف المؤقت عند اللمس
     val totalDurationMs = remember(story.mediaType) {
         if (story.mediaType == StatusMediaType.VIDEO) 15_000L else 6_000L
     }
     val progress = remember { Animatable(0f) }
+    var isPaused by remember { mutableStateOf(false) }
 
-    LaunchedEffect(story.id) {
-        progress.snapTo(0f)
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = totalDurationMs.toInt(),
-                easing = LinearEasing
+    LaunchedEffect(story.id, isPaused) {
+        if (!isPaused) {
+            val remaining = (1f - progress.value).coerceIn(0f, 1f)
+            val duration = (remaining * totalDurationMs).toInt().coerceAtLeast(100)
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = duration,
+                    easing = LinearEasing
+                )
             )
-        )
-        // عند اكتمال شريط الوقت من البداية حتى النهاية يختفي مربع الحوار تلقائياً
-        onDismiss()
+            onDismiss()
+        } else {
+            progress.stop()
+        }
     }
 
     Dialog(
@@ -146,6 +182,22 @@ fun StatusPreviewDialog(
                             .clip(RoundedCornerShape(2.dp))
                             .background(WhatsAppGreen)
                     )
+                }
+
+                if (isPaused) {
+                    Surface(
+                        color = CyberCyan.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = "⏸️ المؤقت متوقف مؤقتاً — انقر للمتابعة",
+                            fontSize = 11.sp,
+                            color = CyberCyan,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
                 }
 
                 // 1. شريط الرأس (الأفاتار + الاسم + الوقت + زر X الدائري للخروج)
@@ -251,16 +303,61 @@ fun StatusPreviewDialog(
                                 Brush.linearGradient(selectedGradient)
                             else
                                 Brush.linearGradient(listOf(Color(0xFF14212C), Color(0xFF0A1015)))
-                        ),
+                        )
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            isPaused = !isPaused
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (localBitmap != null) {
-                        Image(
-                            bitmap = localBitmap.asImageBitmap(),
-                            contentDescription = "معاينة كاملة",
+                        Box(
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = localBitmap.asImageBitmap(),
+                                contentDescription = "معاينة كاملة",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                            if (story.mediaType == StatusMediaType.VIDEO) {
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.65f))
+                                        .border(2.dp, WhatsAppGreen, CircleShape)
+                                        .clickable {
+                                            val path = story.savedFilePath ?: story.mediaUrl
+                                            if (!path.isNullOrBlank()) {
+                                                try {
+                                                    val f = File(path)
+                                                    val uri = FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        f
+                                                    )
+                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(uri, "video/*")
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    }
+                                                    context.startActivity(intent)
+                                                } catch (_: Exception) {}
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.PlayArrow,
+                                        contentDescription = "تشغيل الفيديو",
+                                        tint = WhatsAppGreen,
+                                        modifier = Modifier.size(42.dp)
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         when (story.mediaType) {
                             StatusMediaType.TEXT -> {
@@ -287,23 +384,13 @@ fun StatusPreviewDialog(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(72.dp)
-                                            .clip(CircleShape)
-                                            .background(WhatsAppGreen.copy(alpha = 0.2f))
-                                            .border(1.5.dp, WhatsAppGreen, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.PlayArrow,
-                                            contentDescription = "تشغيل الفيديو",
-                                            tint = WhatsAppGreen,
-                                            modifier = Modifier.size(42.dp)
-                                        )
-                                    }
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(36.dp),
+                                        color = WhatsAppGreen,
+                                        strokeWidth = 3.dp
+                                    )
                                     Text(
-                                        text = "مقطع فيديو الحالة (0:15)",
+                                        text = "جارٍ تحميل مقطع الفيديو...",
                                         fontSize = 13.sp,
                                         color = TextSecondary,
                                         fontWeight = FontWeight.Medium
@@ -315,17 +402,31 @@ fun StatusPreviewDialog(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Image,
-                                        contentDescription = null,
-                                        tint = CyberCyan,
-                                        modifier = Modifier.size(54.dp)
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(36.dp),
+                                        color = CyberCyan,
+                                        strokeWidth = 3.dp
                                     )
                                     Text(
-                                        text = "صورة الحالة",
+                                        text = "جارٍ تحميل صورة الحالة...",
                                         fontSize = 13.sp,
                                         color = TextSecondary
                                     )
+                                    if (loadTimeout) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                onRequestDownload?.invoke(story.id)
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.6f)),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        ) {
+                                            Icon(Icons.Filled.Refresh, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(15.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("إعادة المحاولة 🔄", fontSize = 11.5.sp, color = CyberCyan)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -345,8 +446,8 @@ fun StatusPreviewDialog(
                             onDownloadOrCopy()
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = WhatsAppGreen,
-                            contentColor = Color.Black
+                            containerColor = if (story.isSaved) ElectricBlue else WhatsAppGreen,
+                            contentColor = if (story.isSaved) Color.White else Color.Black
                         ),
                         shape = RoundedCornerShape(14.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
@@ -357,17 +458,24 @@ fun StatusPreviewDialog(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             val isText = story.mediaType == StatusMediaType.TEXT
+                            val icon = if (story.isSaved) {
+                                Icons.Filled.Check
+                            } else if (isText) {
+                                Icons.Filled.ContentCopy
+                            } else {
+                                Icons.Filled.FileDownload
+                            }
                             Icon(
-                                imageVector = if (isText) Icons.Filled.ContentCopy else Icons.Filled.FileDownload,
+                                imageVector = icon,
                                 contentDescription = null,
-                                tint = Color.Black,
+                                tint = if (story.isSaved) Color.White else Color.Black,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = if (isText) "نسخ النص 📋" else "حفظ الحالة 📥",
+                                text = if (story.isSaved) "محفوظة في الجهاز ✅" else if (isText) "نسخ النص 📋" else "حفظ الحالة 📥",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.Black
+                                color = if (story.isSaved) Color.White else Color.Black
                             )
                         }
                     }

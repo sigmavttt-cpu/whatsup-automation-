@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -47,7 +48,9 @@ fun Modifier.shimmerLoading(
         end = Offset(x = translateAnim, y = translateAnim)
     )
 
-    background(brush)
+    drawBehind {
+        drawRect(brush)
+    }
 }
 
 /**
@@ -84,6 +87,38 @@ fun BentoSkeletonList(
     ) {
         repeat(itemCount) {
             BentoSkeletonCard(height = itemHeight)
+        }
+    }
+}
+
+/**
+ * شبكة بطاقات عظمية وميضية لمعاينة الوسائط والصور (Skeleton Loading Grid)
+ */
+@Composable
+fun BentoSkeletonGrid(
+    modifier: Modifier = Modifier,
+    columns: Int = 2,
+    rows: Int = 3,
+    itemHeight: Dp = 110.dp,
+    spacing: Dp = 10.dp
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(spacing)
+    ) {
+        repeat(rows) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                repeat(columns) {
+                    BentoSkeletonCard(
+                        modifier = Modifier.weight(1f),
+                        height = itemHeight,
+                        cornerRadius = 16.dp
+                    )
+                }
+            }
         }
     }
 }

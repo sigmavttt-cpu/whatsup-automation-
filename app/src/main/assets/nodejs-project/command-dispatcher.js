@@ -8,8 +8,28 @@ import { jidNormalizedUser } from '@whiskeysockets/baileys';
 import { sentMessagesCache, CONFIG } from './config.js';
 import { emitToAndroid } from './bridge.js';
 import { isLidJidOrNumber } from './lid-resolver.js';
-import { viewStatus, reactStatus, getStatusKeysCount } from './status-manager.js';
+import { viewStatus, reactStatus, getStatusKeysCount, downloadStatusMedia } from './status-manager.js';
 import { recordStage } from './tracer.js';
+
+function formatPairingErrorMessage(pairErr) {
+    if (!pairErr) return 'فشل غير معروف أثناء طلب كود الاقتران من خوادم واتساب';
+    const statusCode = pairErr.output?.statusCode || pairErr.status;
+    const msg = String(pairErr.message || pairErr).toLowerCase();
+
+    if (statusCode === 429 || msg.includes('rate-overlimit') || msg.includes('rate overlimit') || msg.includes('too many requests')) {
+        return 'تم تجاوز الحد المسموح لطلب أكواد الاقتران مؤقتاً من واتساب. يرجى الانتظار 15 دقيقة ثم إعادة المحاولة.';
+    }
+    if (statusCode === 401 || statusCode === 403 || msg.includes('not-authorized') || msg.includes('invalid phone')) {
+        return 'رفض واتساب طلب الكود لهذا الرقم. يرجى التحقق من صحة الرقم ومفتاح الدولة والتأكد من فتح تطبيق واتساب.';
+    }
+    if (msg.includes('connection closed') || msg.includes('stream errored') || statusCode === 428 || statusCode === 408) {
+        return 'انقطع الاتصال بخوادم واتساب أثناء طلب الكود. يرجى التأكد من تشغيل الإنترنت وإعادة المحاولة.';
+    }
+    if (msg.includes('bad mac') || msg.includes('precondition')) {
+        return 'بيانات الجلسة السابقة غير متزامنة. يرجى إعادة تحديث الاتصال والمحاولة مجدداً.';
+    }
+    return `فشل طلب كود الاقتران: ${pairErr.message || pairErr}`;
+}
 
 /**
  * Creates a command processor bound to the active session and socket accessors.
@@ -47,12 +67,16 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                 case 'PAIR_CODE': {
                     try {
                         if (!command.phone) {
-                            emitToAndroid('ERROR', { error: 'يرجى إدخال رقم الهاتف' });
+                            const errMsg = 'يرجى إدخال رقم الهاتف كاملاً مع مفتاح الدولة';
+                            emitToAndroid('ERROR', { error: errMsg });
+                            emitToAndroid('PAIRING_ERROR', { error: errMsg });
                             break;
                         }
                         const cleanPhone = String(command.phone).replace(/[^0-9]/g, '');
                         if (cleanPhone.length < 7) {
-                            emitToAndroid('ERROR', { error: 'رقم الهاتف غير صالح' });
+                            const errMsg = 'رقم الهاتف غير صالح أو قصير جداً، يرجى كتابة الرقم بالصيغة الدولية';
+                            emitToAndroid('ERROR', { error: errMsg });
+                            emitToAndroid('PAIRING_ERROR', { error: errMsg });
                             break;
                         }
 
@@ -84,10 +108,14 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                             const code = await activeSock.requestPairingCode(cleanPhone);
                             emitToAndroid('PAIRING_CODE', { code, phone: cleanPhone });
                         } else {
-                            emitToAndroid('ERROR', { error: 'محرك واتساب غير جاهز حالياً لطلب الكود، أعد المحاولة بعد لحظات' });
+                            const errMsg = 'محرك واتساب غير جاهز حالياً لطلب الكود، جارٍ إعادة تهيئة الاتصال... أعد المحاولة بعد ثوانٍ';
+                            emitToAndroid('ERROR', { error: errMsg });
+                            emitToAndroid('PAIRING_ERROR', { error: errMsg });
                         }
                     } catch (pairErr) {
-                        emitToAndroid('ERROR', { error: `فشل طلب كود الاقتران: ${pairErr.message || pairErr}` });
+                        const friendlyErr = formatPairingErrorMessage(pairErr);
+                        emitToAndroid('ERROR', { error: friendlyErr, raw: pairErr.message || String(pairErr) });
+                        emitToAndroid('PAIRING_ERROR', { error: friendlyErr, raw: pairErr.message || String(pairErr) });
                     }
                     break;
                 }
@@ -229,7 +257,8 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                         const statusId = command.statusId || command.id;
                         const options = {
                             ghostMode: false,
-                            sendAsChatReply: false
+                            sendAsChatReply: false,
+                            syncReadToSelf: command.syncReadToSelf === true
                         };
                         recordStage(statusId, 'DISPATCHER', 'command-dispatcher.js', 'processCommandLine', {
                             action: 'REACT_STATUS',
@@ -240,6 +269,28 @@ export function createCommandDispatcher({ getSocket, startSession, getAuthFolder
                             options
                         });
                         await reactStatus(sock, statusId, command.emoji || '💚', command.senderPhone, command.participant, authFolder, options);
+                    }
+                    break;
+                }
+
+                case 'DOWNLOAD_STATUS_MEDIA': {
+                    const statusId = command.statusId || command.id;
+                    if (statusId) {
+                        try {
+                            const filePath = await downloadStatusMedia(sock, statusId, authFolder);
+                            emitToAndroid('STATUS_MEDIA_DOWNLOADED', {
+                                id: statusId,
+                                mediaUrl: filePath,
+                                success: !!filePath
+                            });
+                        } catch (err) {
+                            emitToAndroid('STATUS_MEDIA_DOWNLOADED', {
+                                id: statusId,
+                                mediaUrl: null,
+                                success: false,
+                                error: err.message
+                            });
+                        }
                     }
                     break;
                 }

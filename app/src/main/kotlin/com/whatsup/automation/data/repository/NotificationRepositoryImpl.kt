@@ -54,6 +54,20 @@ class NotificationRepositoryImpl @Inject constructor(
         _unreadCount.value = 0
     }
 
+    override suspend fun markAsRead(id: String) {
+        _notifications.update { list ->
+            list.map { if (it.id == id) it.copy(isRead = true) else it }
+        }
+        _unreadCount.value = _notifications.value.count { !it.isRead }
+    }
+
+    override suspend fun deleteNotification(id: String) {
+        _notifications.update { list ->
+            list.filterNot { it.id == id }
+        }
+        _unreadCount.value = _notifications.value.count { !it.isRead }
+    }
+
     override suspend fun clearAll() {
         _notifications.value = emptyList()
         _unreadCount.value = 0

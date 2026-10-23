@@ -241,7 +241,7 @@ class MainActivity : ComponentActivity() {
                                             com.whatsup.automation.presentation.screens.settings.SettingsScreen(
                                                 onNavigateToPairing = { navController.navigate(Screen.Pairing.route) },
                                                 onNavigateToVault = { navController.navigate(Screen.Vault.route) },
-                                                onNavigateToBackup = { navController.navigate(Screen.System.route) },
+                                                onOpenDrawer = { scope.launch { drawerState.open() } },
                                                 onOpenLockSettings = { showLockSettingsDialog = true },
                                                 onCheckUpdates = { updateViewModel.checkForUpdates(isManual = true) },
                                                 onNavigateToSplashAuth = { navController.navigate(Screen.SplashAuth.route) }
@@ -255,6 +255,7 @@ class MainActivity : ComponentActivity() {
                                                 onNavigateToPairing = { navController.navigate(Screen.System.route) },
                                                 onNavigateToRules = { navController.navigate(Screen.Automation.route) },
                                                 onNavigateToLogs = { navController.navigate(Screen.System.route) },
+                                                onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                                                 onOpenDrawer = { scope.launch { drawerState.open() } }
                                             )
                                         }
@@ -303,11 +304,6 @@ class MainActivity : ComponentActivity() {
                                             StatusesScreen(viewModel = statusesViewModel)
                                         }
 
-                                        composable(Screen.Analytics.route) {
-                                            val analyticsViewModel: com.whatsup.automation.presentation.screens.analytics.AnalyticsViewModel = hiltViewModel()
-                                            com.whatsup.automation.presentation.screens.analytics.AnalyticsScreen(viewModel = analyticsViewModel)
-                                        }
-
                                         composable(Screen.Groups.route) {
                                             val rulesViewModel: RulesViewModel = hiltViewModel()
                                             val groupsViewModel: GroupsViewModel = hiltViewModel()
@@ -335,6 +331,15 @@ class MainActivity : ComponentActivity() {
                                                 pairingViewModel = pairingViewModel,
                                                 logsViewModel = logsViewModel,
                                                 initialTab = SystemTab.LOGS
+                                            )
+                                        }
+
+                                        composable(Screen.Notifications.route) {
+                                            val notificationsViewModel: com.whatsup.automation.presentation.screens.notifications.NotificationsViewModel = hiltViewModel()
+                                            com.whatsup.automation.presentation.screens.notifications.NotificationsScreen(
+                                                viewModel = notificationsViewModel,
+                                                onOpenDrawer = { scope.launch { drawerState.open() } },
+                                                onNavigateBack = { navController.popBackStack() }
                                             )
                                         }
                                     }

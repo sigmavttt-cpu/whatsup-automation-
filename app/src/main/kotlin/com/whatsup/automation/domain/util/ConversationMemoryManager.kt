@@ -24,15 +24,28 @@ enum class ConversationIntent {
 }
 
 /**
+ * حالة المسار الحواري المتعدد الخطوات (Finite State Machine State).
+ */
+data class DialogueState(
+    val stateName: String,
+    val stepData: Map<String, String> = emptyMap(),
+    val expiresAt: Long = System.currentTimeMillis() + 900_000L // 15 دقيقة افتراضياً
+)
+
+/**
  * مدير الذاكرة السياقية للمحادثات (Conversation Context Memory Engine).
  * يحتفظ بنافذة منزلقة لآخر 10 رسائل لكل محادثة لفهم التتابع الحواري
- * والتمييز بين: (طلب التسجيل، الاستدراك والتصحيح، السؤال، والدردشة العامة).
+ * والتمييز بين: (طلب التسجيل، الاستدراك والتصحيح، السؤال، والدردشة العامة)،
+ * ويدير حالات المحادثة المتعددة الخطوات (Finite State Machine).
  */
 @Singleton
 class ConversationMemoryManager @Inject constructor() {
 
     // ذاكرة حية منزلقة: رقم الهاتف -> قائمة بآخر 10 دورات حوارية
     private val memoryMap = ConcurrentHashMap<String, MutableList<ConversationTurn>>()
+
+    // خريطة حالات الحوار النشطة (FSM): رقم الهاتف -> الحالة الحوارية الحالية
+    private val stateMap = ConcurrentHashMap<String, DialogueState>()
 
     companion object {
         private const val MAX_TURNS_PER_USER = 10
@@ -141,13 +154,93 @@ class ConversationMemoryManager @Inject constructor() {
     }
 
     /**
-     * تنظيف الذاكرة للمحادثات القديمة (كل ساعة).
+     * جلب آخر N دورات حوارية للمرسل (نافذة السياق المنزلقة).
+     */
+    fun getRecentTurns(phone: String, limit: Int = MAX_TURNS_PER_USER): List<ConversationTurn> {
+        val key = getNormalizedKey(phone)
+        val list = memoryMap[key] ?: return emptyList()
+        return synchronized(list) {
+            list.takeLast(limit)
+        }
+    }
+
+    /**
+     * استرجاع الذاكرة السياقية من سجلات Room عند بداية المحادثة أو بعد إعادة تشغيل التطبيق.
+     */
+    fun hydrateFromRecentLogs(phone: String, logs: List<com.whatsup.automation.domain.model.ActivityLog>) {
+        val key = getNormalizedKey(phone)
+        val list = memoryMap.getOrPut(key) { mutableListOf() }
+        synchronized(list) {
+            if (list.isNotEmpty()) return // الذاكرة محملة بالفعل
+
+            // ترتيب السجلات زمنياً تصاعدياً لضمان التسلسل الصحيح للحوار
+            val sortedLogs = logs.sortedBy { it.timestamp }
+            for (log in sortedLogs) {
+                list.add(
+                    ConversationTurn(
+                        incomingText = log.messageText,
+                        replySent = if (log.actionExecuted.startsWith("إرسال رد")) log.actionExecuted else null,
+                        intent = ConversationIntent.GENERAL_CHAT,
+                        extractedName = log.extractedName,
+                        timestamp = log.timestamp.toEpochMilli()
+                    )
+                )
+            }
+            while (list.size > MAX_TURNS_PER_USER) {
+                list.removeAt(0)
+            }
+        }
+    }
+
+    /**
+     * تعيين حالة الحوار الحالية للعميل (State Machine Transition).
+     */
+    fun setDialogueState(
+        phone: String,
+        stateName: String,
+        stepData: Map<String, String> = emptyMap(),
+        timeoutMs: Long = 900_000L
+    ) {
+        val key = getNormalizedKey(phone)
+        stateMap[key] = DialogueState(
+            stateName = stateName,
+            stepData = stepData,
+            expiresAt = System.currentTimeMillis() + timeoutMs
+        )
+    }
+
+    /**
+     * الحصول على حالة الحوار الحالية للعميل إن وجدت ولم تنتهِ صلاحيتها.
+     */
+    fun getDialogueState(phone: String): DialogueState? {
+        val key = getNormalizedKey(phone)
+        val state = stateMap[key] ?: return null
+        if (System.currentTimeMillis() > state.expiresAt) {
+            stateMap.remove(key)
+            return null
+        }
+        return state
+    }
+
+    /**
+     * مسح حالة الحوار والعودة للحالة الطبيعية.
+     */
+    fun clearDialogueState(phone: String) {
+        val key = getNormalizedKey(phone)
+        stateMap.remove(key)
+    }
+
+    /**
+     * تنظيف الذاكرة للمحادثات القديمة وحالات الحوار منتهية الصلاحية (كل ساعة).
      */
     fun pruneStaleMemories(olderThanMs: Long = 3600_000L) {
         val now = System.currentTimeMillis()
         memoryMap.entries.removeIf { entry ->
             val last = entry.value.lastOrNull()
             last == null || (now - last.timestamp) > olderThanMs
+        }
+        stateMap.entries.removeIf { entry ->
+            now > entry.value.expiresAt
         }
     }
 }

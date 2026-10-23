@@ -105,6 +105,32 @@ class StatusAutomationShieldTest {
         override suspend fun deleteExpiredDeletedStatuses(olderThanTimestamp: Long) {
             database.entries.removeIf { it.value.isDeleted && (it.value.deletedAt ?: 0L) < olderThanTimestamp }
         }
+
+        override suspend fun updateMediaUrl(statusId: String, mediaUrl: String) {
+            val existing = database[statusId]
+            if (existing != null) {
+                database[statusId] = existing.copy(mediaUrl = mediaUrl)
+            }
+        }
+
+        override suspend fun updateSaved(statusId: String, isSaved: Boolean, savedFilePath: String?, savedAt: Long?) {
+            val existing = database[statusId]
+            if (existing != null) {
+                database[statusId] = existing.copy(isSaved = isSaved, savedFilePath = savedFilePath, savedAt = savedAt)
+            }
+        }
+
+        override fun getSavedStatuses(): Flow<List<StatusEntity>> {
+            return flowOf(database.values.filter { it.isSaved }.sortedByDescending { it.savedAt ?: it.timestamp })
+        }
+
+        override suspend fun deleteStatusesByIds(statusIds: List<String>) {
+            statusIds.forEach { database.remove(it) }
+        }
+
+        override suspend fun deleteStatusById(statusId: String) {
+            database.remove(statusId)
+        }
     }
 
     @Before
@@ -176,5 +202,21 @@ class StatusAutomationShieldTest {
 
         assertTrue(isSenderRegistered(registeredPhone))
         assertFalse(isSenderRegistered(unregisteredPhone))
+    }
+
+    @Test
+    fun testDeleteStatuses() = runBlocking {
+        val s1 = StatusStory(id = "S1", senderPhone = "+967771", senderName = "A", mediaType = StatusMediaType.TEXT, textContent = "T1", timestamp = Instant.now())
+        val s2 = StatusStory(id = "S2", senderPhone = "+967772", senderName = "B", mediaType = StatusMediaType.TEXT, textContent = "T2", timestamp = Instant.now())
+        statusRepository.insertStatus(s1)
+        statusRepository.insertStatus(s2)
+
+        assertNotNull(statusRepository.getStatusById("S1"))
+        assertNotNull(statusRepository.getStatusById("S2"))
+
+        statusRepository.deleteStatuses(listOf("S1", "S2"))
+
+        assertNull(statusRepository.getStatusById("S1"))
+        assertNull(statusRepository.getStatusById("S2"))
     }
 }

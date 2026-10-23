@@ -123,6 +123,8 @@ fun PhoneInputWithCountrySelector(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = WhatsAppGreen,
                     unfocusedBorderColor = Color(0x33FFFFFF),
+                    focusedContainerColor = DarkSurface,
+                    unfocusedContainerColor = DarkSurface,
                     focusedTextColor = TextPrimary,
                     unfocusedTextColor = TextPrimary,
                     cursorColor = WhatsAppGreen
@@ -242,6 +244,8 @@ fun CountryPickerDialog(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = CyberCyan,
                         unfocusedBorderColor = Color(0x22FFFFFF),
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface,
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
                         cursorColor = CyberCyan

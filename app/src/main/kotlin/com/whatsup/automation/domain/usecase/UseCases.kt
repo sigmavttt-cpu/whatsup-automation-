@@ -53,6 +53,37 @@ class ProcessIncomingMessageUseCase @Inject constructor(
             return ProcessResult.Ignored("كلام منقول أو سرد غير مباشر - تجاهل")
         }
 
+        // 0.2 درع الغضب والتصعيد والشكاوى الحادة (Frustration & Escalation Shield)
+        val frustration = com.whatsup.automation.domain.nlp.ArabicFrustrationDetector.analyze(message.text)
+        if (frustration.isHighFrustration) {
+            notificationRepository.postNotification(
+                title = "⚠️ تنبيه عميل مستاء أو غاضب",
+                message = "العميل (${message.senderName.ifBlank { targetPhone }}): \"${message.text.take(45)}\"",
+                type = com.whatsup.automation.domain.model.NotificationType.WARNING
+            )
+            logRepository.insertLog(
+                ActivityLog(
+                    senderPhone = targetPhone,
+                    messageText = message.text,
+                    matchedRule = "درع الغضب والتصعيد",
+                    actionExecuted = "كتم الرد الآلي وتنبيه المستخدم عاجلاً (${frustration.explanation})",
+                    status = LogStatus.FAILURE,
+                    extractedName = null
+                )
+            )
+            return ProcessResult.Ignored("كتم الرد الآلي — رصد غضب أو شكوى حادة تتطلب تدخلاً بشرياً")
+        }
+
+        // 0.3 استرجاع الذاكرة السياقية للمحادثة من السجلات في حال البداية الباردة
+        if (targetPhone.isNotBlank() && conversationMemoryManager.getLastTurn(targetPhone) == null) {
+            try {
+                val recentLogs = logRepository.getRecentLogsForPhone(targetPhone, 10)
+                if (recentLogs.isNotEmpty()) {
+                    conversationMemoryManager.hydrateFromRecentLogs(targetPhone, recentLogs)
+                }
+            } catch (_: Exception) {}
+        }
+
         // فحص هل الرقم مسجل مسبقاً في دفتر هاتف الجهاز
         val existingContactName = if (targetPhone.isNotBlank()) {
             deviceContactsManager.getContactDisplayName(targetPhone)
@@ -433,7 +464,16 @@ class MatchRuleUseCase @Inject constructor(
 
             when (rule.patternType) {
                 PatternType.CONTAINS -> {
-                    text.contains(pattern, ignoreCase = true) || com.whatsup.automation.domain.util.ArabicMorphologyHelper.isFuzzyMatch(pattern, text)
+                    text.contains(pattern, ignoreCase = true) || 
+                    com.whatsup.automation.domain.util.ArabicMorphologyHelper.isFuzzyMatch(pattern, text) ||
+                    (pattern.trim().length >= 4 && com.whatsup.automation.domain.nlp.LevenshteinTrieAutomaton(listOf(pattern)).hasFuzzyMatch(text, maxDistance = if (pattern.trim().length >= 6) 2 else 1))
+                }
+                PatternType.FUZZY_MATCH -> {
+                    val trimmedPattern = pattern.trim()
+                    val maxDist = if (trimmedPattern.length >= 6) 2 else 1
+                    text.contains(trimmedPattern, ignoreCase = true) ||
+                    com.whatsup.automation.domain.util.ArabicMorphologyHelper.isFuzzyMatch(trimmedPattern, text) ||
+                    com.whatsup.automation.domain.nlp.LevenshteinTrieAutomaton(listOf(trimmedPattern)).hasFuzzyMatch(text, maxDistance = maxDist)
                 }
                 PatternType.STARTS_WITH -> {
                     val trimmedText = text.trim()

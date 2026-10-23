@@ -1,547 +1,375 @@
 package com.whatsup.automation.presentation.screens.settings
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.whatsup.automation.presentation.components.AppScreenHeader
+import com.whatsup.automation.presentation.components.BentoCard
+import com.whatsup.automation.presentation.screens.settings.components.*
 import com.whatsup.automation.presentation.theme.*
+import kotlinx.coroutines.launch
 
 /**
- * شاشة الإعدادات بتصميم نمط Grouped Settings List (قائمة إعدادات مجمّعة / Sectioned List).
- * تعتمد النمط البصري الفاخر لـ Sigma AutoFlow 2.0: خلفية كربونية عميقة،
- * بطاقات زجاجية مجمعة (Grouped Glass Containers)، وأيقونات نيون زمردية متوهجة.
+ * شاشة الإعدادات العامة والأمان — بتصميم شبكة بينتو السيبرانية (Cyber Bento Grid)
+ * مبنية بالكامل وفق هوية Cyber Jade Dark Glassmorphism مع كروت تفاعلية ومفاتيح سريعة مباشرة.
  */
 @Composable
 fun SettingsScreen(
     onNavigateToPairing: () -> Unit = {},
     onNavigateToVault: () -> Unit = {},
-    onNavigateToBackup: () -> Unit = {},
     onOpenLockSettings: () -> Unit = {},
     onCheckUpdates: () -> Unit = {},
     onNavigateToSplashAuth: () -> Unit = {},
+    onOpenDrawer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // حالات النوافذ الحوارية التفاعلية
+    // التخزين المحلي السريع للإعدادات التفاعلية المباشرة
+    val prefs = remember { context.getSharedPreferences("whatsup_settings_prefs", Context.MODE_PRIVATE) }
+    var isStealthActive by remember { mutableStateOf(prefs.getBoolean("stealth_mode", true)) }
+    var isHapticEnabled by remember { mutableStateOf(prefs.getBoolean("haptic_enabled", true)) }
+    var isNotificationsEnabled by remember { mutableStateOf(prefs.getBoolean("notifications_enabled", true)) }
+    var isAntiBanEnabled by remember { mutableStateOf(prefs.getBoolean("antiban_enabled", true)) }
+
+    // حالات النوافذ الحوارية
     var showLanguageDialog by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
-    var showAccountDialog by remember { mutableStateOf(false) }
-    var showNotificationsSheet by remember { mutableStateOf(false) }
     var selectedLanguage by remember { mutableStateOf("العربية (الافتراضية)") }
-    var isPushEnabled by remember { mutableStateOf(true) }
-    var isStealthActive by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070E13)) // كربوني ليلي فائق العمق مطابق للتصميم
+            .background(DarkBgPrimary)
     ) {
-        // هالة خافتة زمردية في الزاوية العلوية (Ambient Emerald Nebula Glow)
-        Box(
-            modifier = Modifier
-                .size(320.dp)
-                .offset(x = 60.dp, y = (-80).dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x2200E676),
-                            Color(0x0C00C853),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // شريط العنوان العلوي (RTL Header with Emerald Accent)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp, top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // شريط العنوان العلوي الموحد
+            AppScreenHeader(
+                title = "الإعدادات والتحكم",
+                subtitle = "إدارة المحرك، دروع الحماية، والتخصيص المتقدم",
+                onOpenDrawer = onOpenDrawer,
+                modifier = Modifier.padding(bottom = 4.dp, top = 2.dp)
+            )
+
+            // =========================================================================
+            // 1. بطاقة المحرك والحساب الكبرى (Hero Engine & Profile Card)
+            // =========================================================================
+            SettingsEngineCard(onNavigateToPairing = onNavigateToPairing)
+
+            // =========================================================================
+            // 2. بطاقة الأمان والخزينة السرية (Security & Vault Bento)
+            // =========================================================================
+            BentoSectionContainer(
+                title = "الأمان والخزينة السرية",
+                icon = Icons.Filled.Shield,
+                accentColor = CyberCyan,
+                borderBrush = ObsidianGlowBorder.Cyan
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "الإعدادات",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    // الرمز الزخرفي الزمردي الأنيق المطابق للصورة
-                    Icon(
-                        imageVector = Icons.Default.ChevronLeft,
-                        contentDescription = null,
-                        tint = WhatsAppGreenLight,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            // =========================================================================
-            // النمط الرئيسي: Grouped Settings List (قائمة إعدادات مجمّعة / Sectioned List)
-            // مطابق 100% للصورة 3 مع كافة العناصر والأيقونات والتفاصيل
-            // =========================================================================
-            GroupedSettingsListContainer {
-                // 1. الحساب (إعدادات الحساب والربط)
-                GroupedSettingsRow(
-                    title = "الحساب",
-                    subtitle = "إعدادات الحساب والربط",
-                    icon = Icons.Outlined.Person,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        showAccountDialog = true
-                    }
-                )
-
-                SettingsRowDivider()
-
-                // 2. الأمان والخصوصية (إعدادات الحماية والبيانات)
-                GroupedSettingsRow(
-                    title = "الأمان والخصوصية",
-                    subtitle = "إعدادات الحماية والبيانات",
+                BentoActionRow(
+                    title = "قفل التطبيق البيومتري ورمز PIN",
+                    subtitle = "تأمين الدخول بالبصمة ورمز سري مخصص",
                     icon = Icons.Outlined.Lock,
+                    iconTint = CyberCyan,
+                    trailingText = "ضبط الحماية",
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onOpenLockSettings()
                     }
                 )
 
-                SettingsRowDivider()
+                BentoDivider()
 
-                // 3. التنبيهات (إدارة الإشعارات)
-                GroupedSettingsRow(
-                    title = "التنبيهات",
-                    subtitle = "إدارة الإشعارات",
+                BentoActionRow(
+                    title = "الخزينة السرية المشفرة",
+                    subtitle = "استعراض الرسائل المحذوفة ووسائط العرض لمرة واحدة",
+                    icon = Icons.Outlined.FolderSpecial,
+                    iconTint = CyberCyan,
+                    trailingText = "فتح الخزينة",
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onNavigateToVault()
+                    }
+                )
+
+                BentoDivider()
+
+                BentoSwitchRow(
+                    title = "وضع التخفي والشبح (Ghost Mode)",
+                    subtitle = "مشاهدة الحالات والرسائل دون إرسال إشعارات قراءة",
+                    icon = Icons.Outlined.VisibilityOff,
+                    iconTint = CyberCyan,
+                    checked = isStealthActive,
+                    onCheckedChange = { checked ->
+                        isStealthActive = checked
+                        prefs.edit().putBoolean("stealth_mode", checked).apply()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (checked) "تم تفعيل وضع التخفي بنجاح" else "تم إيقاف وضع التخفي"
+                            )
+                        }
+                    }
+                )
+            }
+
+            // =========================================================================
+            // 3. بطاقة النواة والأتمتة الذكية (Automation Core Bento)
+            // =========================================================================
+            BentoSectionContainer(
+                title = "النواة والأتمتة الذكية",
+                icon = Icons.Filled.Bolt,
+                accentColor = WhatsAppGreen,
+                borderBrush = ObsidianGlowBorder.Emerald
+            ) {
+                BentoSwitchRow(
+                    title = "درع مكافحة الحظر والسلوك البشري",
+                    subtitle = "فواصل زمنية عشوائية ومحاكاة الكتابة الحية",
+                    icon = Icons.Outlined.Security,
+                    iconTint = WhatsAppGreen,
+                    checked = isAntiBanEnabled,
+                    onCheckedChange = { checked ->
+                        isAntiBanEnabled = checked
+                        prefs.edit().putBoolean("antiban_enabled", checked).apply()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (checked) "درع مكافحة الحظر نشط لحماية حسابك" else "تم تعطيل محاكي السلوك البشري"
+                            )
+                        }
+                    }
+                )
+
+                BentoDivider()
+
+                BentoSwitchRow(
+                    title = "التنبيهات والإشعارات اللحظية",
+                    subtitle = "إشعار عند تشغيل القواعد والتقاط الرسائل المحذوفة",
                     icon = Icons.Outlined.Notifications,
-                    onClick = {
+                    iconTint = WhatsAppGreen,
+                    checked = isNotificationsEnabled,
+                    onCheckedChange = { checked ->
+                        isNotificationsEnabled = checked
+                        prefs.edit().putBoolean("notifications_enabled", checked).apply()
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        showNotificationsSheet = true
                     }
                 )
+            }
 
-                SettingsRowDivider()
-
-                // 4. النسخ الاحتياطي (نسخ البيانات احتياطياً)
-                GroupedSettingsRow(
-                    title = "النسخ الاحتياطي",
-                    subtitle = "نسخ البيانات احتياطياً",
-                    icon = Icons.Outlined.CloudUpload,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onNavigateToBackup()
-                    }
-                )
-
-                SettingsRowDivider()
-
-                // 5. اللغة (تغيير لغة التطبيق)
-                GroupedSettingsRow(
-                    title = "اللغة",
-                    subtitle = "تغيير لغة التطبيق",
+            // =========================================================================
+            // 4. بطاقة التخصيص والمظهر (UX & Preferences Bento)
+            // =========================================================================
+            BentoSectionContainer(
+                title = "التخصيص وتجربة الاستخدام",
+                icon = Icons.Filled.Palette,
+                accentColor = Color(0xFFA855F7),
+                borderBrush = ObsidianGlowBorder.None
+            ) {
+                BentoActionRow(
+                    title = "لغة التطبيق",
+                    subtitle = selectedLanguage,
                     icon = Icons.Outlined.Language,
+                    iconTint = Color(0xFFA855F7),
+                    trailingText = "تغيير",
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         showLanguageDialog = true
                     }
                 )
 
-                SettingsRowDivider()
+                BentoDivider()
 
-                // 6. عن التطبيق
-                GroupedSettingsRow(
-                    title = "عن التطبيق",
-                    subtitle = "الإصدار 8.3.0",
-                    icon = Icons.Outlined.Info,
-                    isLast = true,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        showAboutDialog = true
+                BentoSwitchRow(
+                    title = "الاهتزاز اللمسي التفاعلي (Haptic Feedback)",
+                    subtitle = "اهتزاز دقيق للأزرار والتمرير وتأكيد الأوامر",
+                    icon = Icons.Outlined.Vibration,
+                    iconTint = Color(0xFFA855F7),
+                    checked = isHapticEnabled,
+                    onCheckedChange = { checked ->
+                        isHapticEnabled = checked
+                        prefs.edit().putBoolean("haptic_enabled", checked).apply()
+                        if (checked) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // قسم إضافي اختياري: إجراءات سريعة للجلسة (Quick Session Controls)
-            Text(
-                text = "إجراءات الجلسة السريعة",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF64748B),
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
-            )
-
-            GroupedSettingsListContainer {
-                GroupedSettingsRow(
-                    title = "ربط واتساب بالباركود",
-                    subtitle = "مسح رمز QR أو إدخال كود الاقتران",
-                    icon = Icons.Default.QrCode2,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onNavigateToPairing()
-                    }
-                )
-
-                SettingsRowDivider()
-
-                GroupedSettingsRow(
-                    title = "الخزينة السرية المشفرة",
-                    subtitle = "حماية وسائط العرض مرة واحدة والملاحظات",
-                    icon = Icons.Default.Shield,
-                    isLast = true,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onNavigateToVault()
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(100.dp)) // تباعد كافٍ لشريط التنقل السفلي
-        }
-    }
-
-    // ==========================================
-    // النوافذ الحوارية التفاعلية المرتبطة بالإعدادات
-    // ==========================================
-
-    // 1. نافذة معلومات الحساب
-    if (showAccountDialog) {
-        AlertDialog(
-            onDismissRequest = { showAccountDialog = false },
-            containerColor = Color(0xFF0F1A22),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = WhatsAppGreenLight)
-                    Text("إعدادات الحساب والربط", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "محرك واتساب يعمل محلياً بالكامل (On-Device 100%) بدون أي خوادم وسيطة.",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 13.sp
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF16252F))
-                            .padding(12.dp)
-                    ) {
-                        Column {
-                            Text("حالة الاتصال: نشط ومستقر 🟢", color = WhatsAppGreenLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("معرّف الجلسة مشفر ومحمي في Android Keystore", color = Color(0xFF64748B), fontSize = 11.sp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showAccountDialog = false
-                        onNavigateToPairing()
-                    }
-                ) {
-                    Text("إدارة الربط والباركود", color = WhatsAppGreenLight, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAccountDialog = false }) {
-                    Text("إغلاق", color = Color(0xFF94A3B8))
-                }
-            }
-        )
-    }
-
-    // 2. نافذة اختيار اللغة
-    if (showLanguageDialog) {
-        AlertDialog(
-            onDismissRequest = { showLanguageDialog = false },
-            containerColor = Color(0xFF0F1A22),
-            title = {
-                Text("تغيير لغة التطبيق", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("العربية (الافتراضية)", "English (US)").forEach { lang ->
-                        val isSelected = selectedLanguage == lang
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0x1F00E676) else Color.Transparent)
-                                .clickable { selectedLanguage = lang }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(lang, color = if (isSelected) WhatsAppGreenLight else Color.White, fontSize = 14.sp)
-                            if (isSelected) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = WhatsAppGreenLight, modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLanguageDialog = false }) {
-                    Text("حفظ", color = WhatsAppGreenLight, fontWeight = FontWeight.Bold)
-                }
-            }
-        )
-    }
-
-    // 3. نافذة عن التطبيق
-    if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            containerColor = Color(0xFF0F1A22),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = WhatsAppGreenLight)
-                    Text("عن التطبيق", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                }
-            },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text("Sigma AutoFlow", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("الإصدار 8.3.0", color = WhatsAppGreenLight, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "المنظومة الاحترافية لأتمتة واتساب والردود الذكية وإدارة الحالات محلياً 100%.",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showAboutDialog = false
-                        onCheckUpdates()
-                    }
-                ) {
-                    Text("فحص التحديثات ⚡", color = WhatsAppGreenLight, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAboutDialog = false }) {
-                    Text("إغلاق", color = Color(0xFF94A3B8))
-                }
-            }
-        )
-    }
-
-    // 4. ورقة خيارات التنبيهات والوضع المتخفي
-    if (showNotificationsSheet) {
-        AlertDialog(
-            onDismissRequest = { showNotificationsSheet = false },
-            containerColor = Color(0xFF0F1A22),
-            title = {
-                Text("إدارة الإشعارات والتنبيهات", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("تنبيهات العمليات المكتملة", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text("إشعار عند إرسال رد آلي أو حفظ جهة اتصال", color = Color(0xFF64748B), fontSize = 11.sp)
-                        }
-                        Switch(
-                            checked = isPushEnabled,
-                            onCheckedChange = { isPushEnabled = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = WhatsAppGreen
-                            )
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("الوضع المتخفي الصامت 🔕", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text("إخفاء الأيقونة والإشعار من شريط الحالة للنظام", color = Color(0xFF64748B), fontSize = 11.sp)
-                        }
-                        Switch(
-                            checked = isStealthActive,
-                            onCheckedChange = { isStealthActive = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = WhatsAppGreen
-                            )
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showNotificationsSheet = false }) {
-                    Text("تم", color = WhatsAppGreenLight, fontWeight = FontWeight.Bold)
-                }
-            }
-        )
-    }
-}
-
-/**
- * الحاوية المجمعة لنمط Grouped Settings List (Sectioned Container).
- * تمثل كتلة زجاجية أنيقة ذات حواف دائرية وظلال ناعمة تضم مجموعة صفوف الإعدادات.
- */
-@Composable
-fun GroupedSettingsListContainer(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF0F1A22)) // لون بطاقة زجاجية داكنة فاخرة
-            .border(
-                width = 1.dp,
-                color = Color(0x1F00E676), // حافة زمردية خافتة وراقية
-                shape = RoundedCornerShape(22.dp)
-            ),
-        content = content
-    )
-}
-
-/**
- * عنصر صف الإعدادات الفردي داخل القائمة المجمعة (Grouped Settings Row Item).
- * مطابق حرفياً للصورة 3: أيقونة خضراء دائرية، نص أساسي وفرعي، وسهم تنقل.
- */
-@Composable
-fun GroupedSettingsRow(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    isLast: Boolean = false,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val haptic = LocalHapticFeedback.current
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
+            // =========================================================================
+            // 5. بطاقة سلامة البيانات والتخزين المحلي (Storage & Database Bento)
+            // =========================================================================
+            BentoSectionContainer(
+                title = "قاعدة البيانات والتخزين المحلي",
+                icon = Icons.Outlined.Storage,
+                accentColor = WhatsAppGreenLight,
+                borderBrush = ObsidianGlowBorder.Emerald
             ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(WhatsAppGreen.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Storage,
+                                contentDescription = null,
+                                tint = WhatsAppGreenLight,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "قاعدة بيانات Room المحلية",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "تخزين مشفر ومحمي محلياً داخل سياق التطبيق",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                    Text(
+                        text = "محلي 100%",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WhatsAppGreenLight
+                    )
+                }
             }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // أيقونة الإعداد داخل حاوية دائرية بتوهج أخضر نيون ناعم
-        Box(
+
+            // =========================================================================
+            // 6. بطاقة النظام والتحديثات والمعلومات (System & About Bento)
+            // =========================================================================
+            BentoCard(
+                modifier = Modifier.fillMaxWidth(),
+                borderBrush = ObsidianGlowBorder.None
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(WhatsAppGreen.copy(alpha = 0.15f))
+                                .border(1.dp, WhatsAppGreen.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Σ", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = WhatsAppGreen)
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Sigma AutoFlow",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "الإصدار 8.3.0 (Build 12) • مستقر",
+                                fontSize = 11.5.sp,
+                                color = TextMuted
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onCheckUpdates()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurface),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33FFFFFF)),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.defaultMinSize(minHeight = 44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.SystemUpdate,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = CyberCyan
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "فحص التحديثات",
+                            fontSize = 11.5.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(90.dp))
+        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0x1400E676))
-                .border(1.dp, Color(0x3300E676), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = WhatsAppGreenLight,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(14.dp))
-
-        // النصوص: العنوان الرئيسي والفرعي
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF8696A0),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        // سهم التنقل الفرعي (RTL Chevron pointing leftwards)
-        Icon(
-            imageVector = Icons.Default.ChevronLeft,
-            contentDescription = null,
-            tint = Color(0xFF64748B),
-            modifier = Modifier.size(20.dp)
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 85.dp)
         )
     }
-}
 
-/**
- * فاصل ناعم بين عناصر القائمة المجمعة لا يتجاوز مساحة الأيقونة ليعطي لمسة iOS/Modern Glass نقية.
- */
-@Composable
-fun SettingsRowDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 70.dp, end = 16.dp),
-        thickness = 0.8.dp,
-        color = Color(0x0F8696A0)
-    )
+    if (showLanguageDialog) {
+        SettingsLanguageDialog(
+            selectedLanguage = selectedLanguage,
+            onLanguageSelected = { selectedLanguage = it },
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
 }

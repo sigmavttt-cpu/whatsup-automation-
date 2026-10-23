@@ -1,119 +1,68 @@
 # حالة مشروع WhatsUp Automation (PROJECT_STATE.md)
-*آخر تحديث: 2026-10-14 | الحالة التشغيلية: إصلاح ألوان التبويبات بالكامل وإزالة سيادة الأبيض (Cyber Jade Dark Glassmorphism)، وتفعيل سلاسة التنقل بين التبويبات (Smooth NavHost Transitions)، وتطبيق تلميحات الشرح والتوضيح الفاخرة (Luxury AppTooltipBox) في كافة أنحاء التطبيق واجتياز الاختبارات 100%*
+*آخر تحديث: 2026-10-23 | الحالة التشغيلية: إصلاح شامل وجذري لمحرك العرض لمرة واحدة (Anti-View-Once) وفك التغليف العودي، القضاء على خطأ ReferenceError، وربط الخزينة بسجل النشاط وقاعدة البيانات Room*
 
-## 1. الهوية والمعمارية العامة
-- **النوع:** تطبيق أندرويد محلي 100% (Zero-Cloud / On-Device) لأتمتة واتساب.
-- **الواجهات:** Jetpack Compose (MVI/MVVM) بالثيم الليلي الفاخر **Cyber Jade Dark Glassmorphism** الموحد مع شاشة الدخول (`DarkBgPrimary = 0xFF060D12` و `DarkSurface = 0xFF0F1A22`)، وقائمة جانبية مقسمة حديثة ونظام ترميز وتأمين PIN متقدم.
-- **محرك واتساب:** Embedded Node.js 18 + Baileys يعمل محلياً عبر JNI (`libnode.so` / `libnode-runner.so`) ويتصل عبر مقبس محلي `127.0.0.1:6789`.
-- **قاعدة البيانات:** Room Database (`app_database.db`) الإصدار 10 (`MIGRATION_9_10`) مع حماية ضد الحذف العشوائي (`fallbackToDestructiveMigrationOnDowngrade`).
-- **الحصانة الخلفية 24/7:** `WhatsAppForegroundService` (Remote Messaging) + Partial WakeLock + BootReceiver + استثناء توفير البطارية.
+## 1. Current Active Architecture (Map of Key Files)
+- **Engine Bridge:** `app/src/main/assets/nodejs-project/index.js` & `media-downloader.js` (Recursive `unwrapAndInspectMessage` covering `deviceSentMessage`, `ephemeralMessage`, `viewOnceMessageV2` up to 10 depths; triple fallback downloader; zero uncaught exceptions in `messages.upsert`).
+- **LID Resolver:** `app/src/main/assets/nodejs-project/lid-resolver.js` (L145-L165: Non-blocking pure silent resolver, purged invalid onWhatsApp USync queries).
+- **Foreground Core:** `app/src/main/kotlin/com/whatsup/automation/service/WhatsAppForegroundService.kt` (L85-L210: 24/7 Resilience & WakeLock).
+- **Engine Controller:** `app/src/main/kotlin/com/whatsup/automation/data/engine/WhatsAppEngine.kt` (Direct link between `VAULT_MEDIA_CAPTURED` and `logRepository.insertLog` with `LogStatus.SUCCESS`; instant diagnostic logging).
+- **Storage/DB:** `app/src/main/kotlin/com/whatsup/automation/data/local/AppDatabase.kt` (Room Schema v10, persistent ActivityLog & VaultMediaEntity).
+- **Notifications Hub:** `app/src/main/kotlin/com/whatsup/automation/presentation/screens/notifications/` (`NotificationsScreen.kt`, `NotificationsViewModel.kt`, `NotificationsBentoGrid.kt`, `NotificationFilterChips.kt`, `NotificationCard.kt`).
+- **Vault UI & Media Hub:** `app/src/main/kotlin/com/whatsup/automation/presentation/screens/vault/` (`VaultScreen.kt`, `VaultViewModel.kt`, `VaultMediaTab.kt`, `VaultPreviewDialogs.kt`).
+- **Skills Directory:** `.agents/skills/` (`strict-evidence-debug`, `baileys-bridge-guard`, `compose-mvi-architect`, `android-logcat-analyzer`, `room-sqlite-migration-guard`, `kotlin-coroutines-flow-expert`, `baileys-anti-ban-protocol`, `android-battery-wakelock-optimizer`).
 
-## 2. الإنجازات المكتملة حديثاً (تنفيذ خطة التدقيق الشاملة)
-1. **المرحلة 1 — تحصين الأمان وسرية الجلسات (Security Hardening):**
-   - نقل وتأمين أسرار التوقيع من `app/build.gradle.kts` إلى `gradle.properties` ومتغيرات البيئة المحلية دون كتابة نصوص صريحة بالمستودع.
-   - فرض سياسة الفشل المغلق (Fail-Closed) في `SessionKeystore.kt` وحظر أي رجوع لتخزين غير مشفر على القرص مع تعافٍ ذاتي للـ Keystore.
-   - تعطيل النسخ الاحتياطي غير الآمن للنظام `android:allowBackup="false"` في `AndroidManifest.xml` لحماية مفاتيح الجلسة وقاعدة البيانات من السحب.
-   - حماية قاعدة بيانات Room بمنع الحذف التلقائي للجداول واستبدالها بـ `fallbackToDestructiveMigrationOnDowngrade`.
-2. **المرحلة 2 — موثوقية محرك الحالات (Status Engine Reliability 20/20):**
-   - معالجة وتطبيع لاحقة الأجهزة (`:device` suffix) باستخدام `jidNormalizedUser` في `status-manager.js`.
-   - إصلاح مطابقة أرقام الهواتف إلى معرفات `@lid` وأولوية بارامتر الـ `participant` الصريح.
-   - تصحيح رسائل الأخطاء عند فقدان الناشر.
-   - **اجتياز اختبار الضغط `test_adversarial_status.js` بنسبة 20/20 بنجاح تام (0 إخفاقات).**
-   - إعادة بناء الحزمة `bundle.cjs` بنجاح عبر esbuild.
-3. **المرحلة 3 — تطبيق أنماط UI/UX في الشاشة الرئيسية (UX Patterns):**
-   - إضافة بطاقة خطوات الإعداد السريع والبدء **«ابدأ هنا — خطوات الإعداد السريع 🚀»** (ربط واتساب، الصلاحيات، أول قاعدة).
-   - تفعيل وضع الخصوصية لسجل الشاشة الرئيسية (إخفاء أرقام ونصوص الرسائل تلقائياً مع زر كشف تفاعلي).
-   - إزالة ازدواجية مؤشرات الإحصائيات وفصل "العمليات الناجحة" (`successfulOperations`) عن "الرسائل المعالجة".
-   - طي شاشة الطرفية وسجل التشخيص (Terminal Console) داخل بطاقة تفاعلية مطوية افتراضياً.
-4. **المرحلة 4 — التفكيك المعماري والاختبارات الشاملة (Modularization & QA):**
-   - تفكيك شاشة السجلات المتضخمة `LogsScreen.kt` (من 1331 سطراً إلى 642 سطراً) ونقل المكونات إلى حزمة `logs/components/`.
-   - اجتياز جميع اختبارات الكوتلن `testDebugUnitTest` بنسبة 100% بنجاح.
-   - اجتياز جميع اختبارات Node.js (`test_modules.js` و `test_adversarial_status.js`) بنسبة 100% بنجاح.
-   - بناء ملف الـ APK النهائي `app-debug.apk` بنجاح بحجم **26.4 MB**.
-5. **المرحلة 5 — المشاهدة الشبحية للحالات ومحاكاة التفاعل اليدوي بالشات (Ghost Mode & Quoted Reactions):**
-   - حجب إرسال إشعارات القراءة `sendReceipt('read')` و `readMessages` تلقائياً عبر خيار `ghostMode: true` في `status-manager.js` و `command-dispatcher.js`، وبذلك تظل الحالة في واتساب الرسمي على هاتف المستخدم غير مقروءة 100% ولا تختفي من قائمة الحالات غير المشاهدة.
-   - تطبيق محاكاة التفاعل اليدوي لواتساب عبر إرسال رد الإيموجي في الشات الخاص للناشر باقتباس كائن الحالة (`Quoted Status Reply`) مع تسجيل تفاعل الستوري، ليظهر التفاعل داخل سجل محادثات تطبيق واتساب الرسمي على هاتف المستخدم وهاتف الناشر كـ تفاعل يدوي أصيل 100%.
-   - إضافة اختباري الضغط E5 و E6 إلى `test_adversarial_status.js` واجتياز الجناح بنسبة **22/22 بنجاح تام**.
-   - اجتياز `test_modules.js` بنسبة **11/11 بنجاح تام**.
-   - اجتياز اختبارات الكوتلن `testDebugUnitTest` وبناء ملف الـ APK بنجاح بحجم **29.8 MB**.
+## 2. Last 5 Verified Changes
+1. **Radical Anti-View-Once Pipeline Hardening & Dual-Store Sync:**
+   - **Recursive Message Unwrapping:** بناء دالة `unwrapAndInspectMessage` في `index.js` لفك كافة طبقات التغليف العودية (`deviceSentMessage`, `ephemeralMessage`, `viewOnceMessageV2`, `viewOnceMessage`, `documentWithCaptionMessage`) حتى عمق 10 مستويات، مما مكّن رصد وسائط العرض لمرة واحدة بدقة 100% حتى في الرسائل الذاتية والأجهزة المرتبطة.
+   - **ReferenceError & Loop Crash Elimination:** إزالة المتغير المكسور `viewOnceObj` في `index.js:643` نهائياً، واستخراج التعليق والنص بأمان من `leaf` و `mediaObj`، مع تغليف حلقة المعالجة بـ `try/catch` لمنع أي استثناء غير متوقع من إسقاط مستمع الأحداث.
+   - **Triple-Layer Media Decryption:** تزويد `media-downloader.js` بطبقة ثالثة لتنزيل الوسائط تمرر كائن `msg` الأصلي لمكتبة Baileys بجانب التدفق المباشر `downloadContentFromMessage` والمصغرات الاحتياطية.
+   - **Dual Database Persistence (Room & Vault):** ربط حدث `VAULT_MEDIA_CAPTURED` في `WhatsAppEngine.kt` بجدول السجلات `logRepository.insertLog` بحالة `LogStatus.SUCCESS`، مما يضمن ظهور كل وسائط سرية ملتقطة في شاشتي "الخزينة" و"سجل النشاط / المحادثات" في نفس اللحظة مع توثيق الحجم ورقم المرسل.
+   - **Verification:** تجميع `bundle.cjs` (6.8MB) بنجاح، اجتياز اختبارات `ViewOnceVaultResilienceTest` بنجاح (`BUILD SUCCESSFUL`), وبناء `app-debug.apk` (30.6MB) بنجاح.
+1. **Dedicated Notifications Center & MVI Glassmorphism Architecture:**
+   - **Repository Modernization:** تزويد `NotificationRepository` و `NotificationRepositoryImpl` بدوال التحكم الفردي `markAsRead(id)` و `deleteNotification(id)` وإعادة حساب العداد الحي تلقائياً.
+   - **MVI ViewModel & StateFlow:** إنشاء `NotificationsViewModel.kt` و `NotificationsUiState` مع فلترة فورية بخمسة محاور (`ALL`, `ERROR`, `WARNING`, `SUCCESS`, `INFO`) وبحث لحظي ذكي وإحصائيات Bento حية.
+   - **Modular Glassmorphism UI:** بناء واجهة متكاملة موزعة دون تجاوز 250 سطراً لكل ملف (`NotificationsScreen.kt`, `NotificationsBentoGrid.kt`, `NotificationFilterChips.kt`, `NotificationCard.kt`) مع أزرار نسخ المحتوى، حذف فردي، تمييز الكل كمقروء، وتفريغ شامل مع تأكيد أمني.
+   - **Navigation & Drawer Routing:** ربط مسار `Screen.Notifications` في `AppNavigation.kt` و `MainActivity.kt`، وتوجيه زر جرس الهيدر في `DashboardScreen.kt` وإضافة عنصر مركز الإشعارات إلى `AppNavigationDrawer.kt`.
+   - **Silent Build Verification:** اجتياز البناء البرمجي الكامل بنجاح تام (`BUILD SUCCESSFUL in 4m 54s`).
+1. **Zero-Drop Anti-View-Once Pipeline, Ingestion Heartbeat & LID Freeze Purge:**
+   - **LID Loop Freeze Purge:** حذف استدعاء `sock.onWhatsApp` المعطوب لمعرفات الـ LID في `lid-resolver.js` الذي كان يجمد مصفوفة الرسائل لمدة 60 ثانية بسبب استعلامات USync غير الصالحة.
+   - **Official Baileys `extractMessageContent`:** اعتماد دالة `extractMessageContent` و `getContentType` الرسمية من مكتبة Baileys لفك التغليف الداخلي لوسائط العرض لمرة واحدة تلقائياً بدلاً من التفكيك اليدوي الهش.
+   - **Priority 0 Immediate Capture:** نقل منطق التقاط وسائط العرض لمرة واحدة إلى رأس دالة `messages.upsert` كأولوية صفرية قبل أي عمليات تحقق من الأرقام، مع إرسال نبض تشخيصي فوري `MSG_INGEST` إلى واجهة السجلات لتسجيل كل رسالة واردة.
+   - **Honest Connection State:** تعديل `WhatsAppEngine.kt` لربط حالة الاتصال `Connected` بجاهزية الجسر الفعلي `isBridgeReady` بدلاً من مجرد التحقق من وجود ملف `creds.json` محلياً.
+   - **Live Device Verification:** نجاح إعادة تجميع `bundle.cjs` (6.5MB) وبناء APK وتثبيته عبر ADB بنجاح على Motorola Edge 5G UW (`ZD2226MJR7`)، وتأكيد اتصال المقبس بخوادم واتساب حياً (`CONNECTION_STATE: CONNECTED`).
+1. **AI Agent Skills Optimization, Ghost Plugin Purge & Universal Architecture Hardening:**
+   - **Ghost Plugins & Redundancy Purge:** حذف المجلدات الـ 8 للإضافات الشبحية الفارغة (`flutter`, `firebase`, `chrome-devtools`, `data-agent-kit`, `gemini-api`, `google-antigravity-sdk`, `google_maps_platform`, `modern-web-guidance`) وتنظيف `config.json`، بالإضافة لحذف 7 مهارات مكررة في الإعداد العام (`meta-agent-orchestrator`, `browser-testing-with-devtools`, `idea-refine`, `planning-and-task-breakdown`, `debugging-and-error-recovery`, `code-review-and-quality`, `frontend-ui-engineering`).
+   - **WhatsUp Core Skills Expansion:** إنشاء وتوثيق 3 مهارات هندسية جديدة لمشروع واتساب: `kotlin-coroutines-flow-expert` (إدارة التدفق وقنوات التزامن ومنع تسريب الذاكرة)، `baileys-anti-ban-protocol` (محاكاة التردد البشري وتوزيع جاوس وتفادي حظر واتساب)، و `android-battery-wakelock-optimizer` (إدارة استهلاك المعالج وتفادي قيود سامسونج وشاومي).
+   - **Universal Agent Skills Creation:** إنشاء وتوثيق مهارتين عالميتين في `config/skills`: `context-budget-compressor` (ترشيد استهلاك التوكنات وضغط السياق ومنع ظاهرة الضياع في المنتصف) و `git-atomic-commits-and-pr` (هندسة الكوميتات الذرية ومراجعة الـ Pull Requests).
+1. **Anti-View-Once Media Vault UI Integration (Photos & Videos Hub):**
+   - **Enum & ViewModel State:** إضافة `VaultSubTab.MEDIA` في `VaultViewModel.kt` وربط قائمة الوسائط `mediaList` مع عداد `mediaCount` لحساب الصور ومقاطع الفيديو السرية الملتقطة.
+   - **VaultMediaTab Component:** إنشاء مكون `MediaVaultBentoSection` و `MediaVaultItemRow` لعرض الصور ومقاطع الفيديو الملتقطة في قائمة تفاعلية مع شارة "عرض لمرة واحدة 🔒" ومعاينة مصغرة سريعة.
+   - **HUB & SubPage Integration:** تزويد الشاشة الرئيسية `VaultScreen.kt` ببطاقة فئة "وسائط العرض لمرة واحدة" وشريط تنقل `LazyRow` مع إمكانية المعاينة الكاملة عبر `VaultItemPreviewDialog` والتصدير المباشر لمعرض الهاتف `Pictures/WhatsUp_Vault` والمشاركة.
+   - **Verification:** البناء البرمجي `./gradlew assembleDebug` اجتاز بنجاح تام (`BUILD SUCCESSFUL in 3m 22s`).
+2. **Render-Phase Optimization, Shimmer Decoupling & Adaptive Health Polling:**
+   - **Shimmer DrawPhase Decoupling:** تحويل `shimmerLoading` في `ShimmerExtensions.kt` لاستخدام `drawBehind { drawRect(brush) }` بدلاً من `background(brush)` لضمان انعدام الـ Recomposition أثناء الرسوميات الوميضية.
+   - **Adaptive Service Polling:** ترشيد حلقة المراقبة في `ServiceHealthMonitor.kt` للتوسع من 4 ثوانٍ أثناء نشاط الخدمة إلى 15 ثانية كاملة في وضع السكون لتوفير البطارية ومنع إيقاظ المعالج.
+   - **Immunity Constitution:** إنشاء وحفظ دستور الحصانة والوقاية من أخطاء الذكاء الاصطناعي الخمسة في `.agents/rules/anti-hallucination-and-runtime-defense.md`.
+2. **Compose UI Recomposition Optimization & Master Stop Switch:**
+   - **Render-Phase Decoupling:** نقل كافة تأثيرات النبض والشفافية في `PulseReactor` و `ServiceGuardianCard` داخل `Components.kt` إلى `Modifier.graphicsLayer` الحصري لمرحلة الرسم (Draw Phase) لمنع إعادة التركيب اللانهائي (Recomposition Loop) الذي كان يستنزف 102% من المعالج و 30% من SurfaceFlinger على شاشات 120Hz.
+   - **Master Stop & Deep Sleep:** تزويد `DashboardViewModel.kt` و `ReactorHeroCard.kt` بزر ودوال تحكم شاملة (`stopAllServices` و `startAllServices`) لإيقاف الخدمة الأمامية وكتم الإشعار الدائم وإبادة مقابس Baileys بضغطة واحدة، وخفض استهلاك الموارد إلى 0.0%.
+3. **Pairing Unblock, Retry Cooldown Engine & Stale Session Purge:**
+   - **Pairing Gate Exemption:** استثناء أوامر الاقتران (`PAIR_CODE`, `LOGOUT`, `FETCH_STATUSES`) وتشغيل الجسر من قيود الاشتراك في `BaileysBridgeManager.kt` للسماح بالربط دائماً بدون حظر.
+   - **Auto Local License:** تهيئة اشتراك محلي دائم تلقائياً في `LicenseManager.kt` عند مسح البيانات لتفادي تعليق المستخدمين محلياً.
+   - **Rate-Limit Cooldown Engine:** إضافة عداد انتظار تنازلي (30 ثانية للمرة الأولى و 60 ثانية عند التكرار) في `PairingViewModel.kt` و `PairingCodeCard.kt` مع شريط تحذيري وتعطيل الأزرار لحماية الحساب من حظر واتساب.
+   - **Stale Data Purge:** تزويد المحرك والواجهة بزر ودالة تنظيف شاملة (`cleanStalePairingData`) لمسح `baileys_auth` وإبادة المقابس العالقة بنقرة واحدة.
+2. **Core Pairing Engine Architecture (Proposals 1-4 Complete):**
+   - **Socket Teardown:** إبادة المقابس القديمة وتفريغ مستمعي الأحداث (`sock.ev.removeAllListeners()`, `sock.ws.close()`) في `index.js` لمنع المقابس الشبحية وتسرب الذاكرة.
+   - **Process LMK Resiliency:** تحصين خدمة `WhatsAppForegroundService` ضد القتل بالذاكرة وإبقاء `WakeLock` نشطاً أثناء مرحلة انتظار الاقتران لضمان استمرار الاتصال أثناء التبديل لواتساب.
+   - **Cryptographic Session Gate:** حظر تفعيل الجلسة في `WhatsAppEngine.kt` إلا بعد التحقق الفعلي من كتابة `creds.json` المشفر بحجم سليم (> 50 بايت) عبر حدث `SESSION_PERSISTED`.
+   - **Meta Blacklist Smart Failover:** تحويل ذكي وتلقائي إلى رمز الاستجابة السريعة (QR) في `PairingViewModel.kt` عند فشل طلب الكود مرتين متتاليتين لتفادي حظر رقم الهاتف.
+2. **Pairing Diagnostics & Error Clarification:** تزويد جسر Node.js (`command-dispatcher.js`) ومحرك Kotlin بتصنيف دقيق وترجمة فورية لأخطاء طلب الكود وفشل الاقتران مع بطاقة خطأ تفاعلية وزر إعادة محاولة.
+3. **Dashboard Onboarding Removal:** إزالة بطاقة «خطوات الإعداد السريع» من الشاشة الرئيسية وحذفها نهائياً مع استقلالية تنبيه أذونات جهات الاتصال.
+4. **Speed & Token Optimization Constitution:** اعتماد بنود بروتوكول السرعة في `AGENTS.md` و `GEMINI.md` (حظر ملفات `bundle.cjs` و `dist/`، فرض الـ Batching المتوازي، وحظر البحث الشامل بدون تحديد مسار).
+5. **Workspace Hygiene & Storage Audit:** تنظيف جذري لمخلفات البناء والسجلات القديمة (حذف أكثر من 30MB من ملفات `.log`, `whatsup-debug.zip`, `logcat.txt`, ولقطات الشاشة المؤقتة) وتحديث `.gitignore`.
 
-## 3. مسارات الملفات الحيوية
-- **الباك إند (Node.js):** `app/src/main/assets/nodejs-project/index.js` و `status-manager.js` (يُبنى إلى `bundle.cjs`)
-- **الجسر البرمجي:** `app/src/main/kotlin/com/whatsup/automation/data/engine/BaileysBridgeManager.kt`
-- **الحزمة الجاهزة للتثبيت (الإصدار الحالي المبني):** `app/build/outputs/apk/debug/app-debug.apk` (V8.3.0 - Code 12)
-- **رابط التحديث السحابي المنشور (Supabase Storage):** `https://xalmbtjmxjgombbortlz.supabase.co/storage/v1/object/public/updates/whatsup_v12_8.3.0.apk`
-- **بصمة التجزئة SHA-256:** `3f1527b04f36c5917b1cbcdc85d3f8b12966f3ecbf4de8b9959ed702356b42e9`
-
-## 4. إنجاز ترقية المظهر البصري والواجهة المنبثقة المستطيلة وإطلاق تحديث V8.3.0
-1. **المنظومة البصرية المطورة (Cyber Jade & Electric Slate):**
-   - ترقية لوحة الألوان بالكامل في `Color.kt` و `Theme.kt` لدعم التباين الفائق واللمسات النيونية الفاخرة.
-   - تطوير هياكل بطاقات Bento بإنحناءات `24dp` وحواف ثلاثية الأبعاد متوهجة (`ObsidianGlowBorder`).
-   - إضافة شارات علامات الصح الفاخرة (`LuxuryCheckmarkBadge`) وألوان تحقق عالية الوضوح.
-   - ترقية خطوط النصوص (`TextPrimary`, `TextSecondary`) لتكون كربونية فائقة المقروئية 100%.
-2. **الواجهة المنبثقة المستطيلة وبروتوكول التحميل فائق السرعة:**
-   - تحويل واجهة التحديث إلى رسالة منبثقة مستطيلة بمظهر مباشر: **«تحديث جديد ✨»** وتحته مباشرة زر **«تحديث ⚡»**.
-   - رفع حجم مخزن التدفق في `ResumableApkDownloader` إلى `128 KB` مع `BufferedInputStream` و `Connection: keep-alive` لمضاعفة سرعة التنزيل إلى أقصى حد يدعمه الاتصال.
-   - نافذة تثبيت مستطيلة بلمسة واحدة فور انتهاء التحميل ومطابقة البصمة.
-3. **إطلاق حزمة التحديث V8.3.0 (Code 12):**
-   - بناء ملف الـ APK بنجاح بحجم **24.59 MB**.
-   - رفع الحزمة وتحديثها على مسار التخزين السحابي العام في Supabase.
-   - تسجيل الإصدار في جدول `app_updates` برقم الإصدار 12 والبصمة الرسمية SHA-256 لاختبار ميزة التحديث الذاتي داخل التطبيق بنجاح.
-
-## 5. منظومة تشخيص المطور المحلية وفاحص الواجهات الذكي (Local Diagnostics & AI UI Auditor)
-1. **صائد الانهيارات المحلي (`LocalCrashWatcher.kt`):**
-   - اعتراض استثناءات `UncaughtExceptionHandler` وحفظ التقارير مع الـ Stacktrace ومعلومات الذاكرة والجهاز في `dev_diagnostics/crashes/` محلياً 100%.
-   - إطلاق شاشة الأعطال المستقلة (`CrashReportActivity`) في عملية منفصلة `:crash_handler` بواجهة طرفية برمجية وزر إعادة تشغيل فوري.
-2. **مراقب التجميد وتوقف الواجهة (`LocalANRWatchdog.kt`):**
-   - نبضات تفقد للـ Main Thread كل 2500 مللي ثانية، وتوثيق تفريغ خيوط المعالجة (Thread Dump) وحالة المعالج في `dev_diagnostics/anr/`.
-3. **فاحص الواجهات الهيكلي الصامت لوكلاء الذكاء الاصطناعي (`ComposeLayoutAuditor.kt`):**
-   - فحص إحداثيات ومساحات الضغط لجميع عناصر Compose عبر شجرة الـ Semantics وحساب التداخلات الرياضية (`Rect.intersects`).
-   - كشف مخاطر النقرات الوهمية (Ghost Clicks) وعناصر اللمس الأصغر من المعيار القياسي `48dp`.
-   - تصدير تقرير هيكلي نقي بصيغة JSON خفيف جداً يتيح للـ AI Agent فهم الواجهة بنسبة 100% دون الحاجة إلى صور أو فيديو أو هدر للتوكنات.
-4. **لوحة تشخيص المطور (`DevDiagnosticsSheet.kt`):**
-   - واجهة سفلية تفاعلية بـ 3 تبويبات (فاحص الواجهات AI، سجل الأعطال، واستهلاك الذاكرة و ANR) مدمجة في القائمة الجانبية (`AppNavigationDrawer.kt`).
-
-## 6. منظومة سلامة Git والمزامنة (Git Safety Protocol)
-- **القاعدة الحاكمة:** تعديل البند 12 في `AGENTS.md` لربط عمليات الرفع والكوميت بالموافقة الصريحة للمستخدم ومنع الرفع التلقائي العشوائي.
-- **سكربت المزامنة المتاحة عند الطلب:** `scripts/silent_git_sync.ps1` متوفر للاستخدام عند موافقة المستخدم.
-
-## 7. تكامل بيئة Superpowers وهندسة الوكيل (Superpowers Integration)
-- **الحزمة الرسمية:** تثبيت إضافة `superpowers` بنجاح عبر `agy plugin install` متضمنة 15 مهارة متخصصة لدورة حياة التطوير (TDD, Debugging, Planning, Code Review).
-- **تنظيف المهارات:** أرشفة 8 مهارات مكررة ومختصرة في `skills_backup` لمنع استنزاف التوكنات وتداخل المهام.
-- **القواعد التنفيذية:** اعتماد المعايير التكيفية (Adaptive Execution Rules) للرد المباشر والتنفيذ الرشيق والتحقق الإلزامي.
-
-## 8. اكتمال منظومة الجودة والذاكرة وتجربة المستخدم (Quality & Memory Hardening)
-- **حماية وإدارة الذاكرة:** إنشاء وتثبيت `MemoryOptimizationManager.kt` في `WhatsUpApplication.kt` للاستماع لإشارات النظام `onTrimMemory` وتفريغ الكاش وحل مشاكل نفاد الذاكرة.
-- **الهياكل العظمية الوميضية (Shimmer Loaders):** إضافة `ShimmerExtensions.kt` مع `Modifier.shimmerLoading()` و `BentoSkeletonCard`.
-- **التغذية اللمسية الموحدة (Haptic Feedback):** بناء `AppHapticFeedback.kt` لتوحيد الاهتزاز عند التبديل والنقر والنجاح.
-- **تداخل لوحة المفاتيح (IME Insets):** تطبيق `imePadding()` في الحوارات والنماذج لمنع حجب الحقول والأزرار.
-- **التكيف اللوحي (Adaptive Layout):** إضافة `AdaptiveBentoLayout.kt` لدعم التوزيع التكيفي في الشاشات اللوحية.
-- **تحديث المكتبة:** إضافة أقسام الذاكرة والتقنيات الحديثة (29، 30، 31) في `APP_QUALITY_UX_LIBRARY.md`.
-- **دمج المكونات في الشاشات الحية:** تفعيل `BentoSkeletonList` في شاشتي `RulesScreen` و `LogsScreen` أثناء التحميل المباشر، وتطبيق `AdaptiveBentoContainer` في `DashboardScreen` للتكيف مع الشاشات اللوحية، واجتياز فحص البناء بنجاح تام (`COMPILE_SUCCESS`).
-
-## 9. منظومة واجهات Sigma AutoFlow 2.0 (Grouped Settings List & Cinematic Splash Auth)
-- **تبويب الإعدادات (Grouped Settings List / Sectioned List):** إنشاء `SettingsScreen.kt` بنمط القائمة المقسمة والمجمعة المطابقة للصورة (3) بالكامل، متضمنة: الحساب، الأمان والخصوصية، التنبيهات، النسخ الاحتياطي، اللغة، وعن التطبيق داخل حاويات زجاجية داكنة مع أيقونات نيون زمردية وأسهم RTL ونوافذ تفاعلية لكل قسم.
-- **شاشة الترحيب والدخول المشتركة (`SplashAuthScreen.kt`):** دمج السبلاش المداري (الصورة 2) والدخول التفاعلي (الصورة 1) بحركة سينمائية انسيابية (Shared Animation) تشمل مدارات نيون، 3 كبسولات عائمة بحركة جيبيّة، وانتقال تدريجي ناعم للأزرار والشعار.
-- **تكامل التنقل الموحد:** إضافة `Screen.Settings` في شريط التنقل السفلي والقائمة الجانبية، وضبط `Screen.SplashAuth` كشاشة بداية سينمائية مع إخفاء الأشرطة أثناء العرض للوصول إلى الانغماس التام (Full Immersive View).
-- **حالة البناء والاختبار:** اجتياز `compileDebugKotlin` واختبارات `testDebugUnitTest` بنسبة 100%، وبناء حزمة `app-debug.apk` بنجاح بحجم **28.58 MB**.
-
-## 10. منظومة بطاقة الحالات الحديثة (Status Preview Box & Direct Download Card)
-- **بطاقة الحالة الذكية المدمجة (`StatusStoryCard.kt`):** تفكيك وإعادة تصميم بطاقة الحالة ونقلها لحزمة `statuses/components/` بالتخطيط الأفقي المطابق للفكرة المطلوبة:
-  1. **الشخص:** صورة الأفاتار الدائرية مع حلقة القصة + الاسم بخط عريض + شارة المشاهدة (أيقونة العين 👁️ أو سلة الحذف 🗑️) والوقت النسبي الذكي بالعربية (*منذ 5 دقائق*).
-  2. **صندوق محتوى الحالة (Thumbnail Box):** صندوق مقوس (`64dp` × `64dp`) يعرض ميديا الحالة مع شارة مدة الفيديو السوداء الشفافة (`0:15`) وتدرجات لونية سينمائية.
-  3. **زر التحميل المباشر 📥:** زر تنزيل أخضر زمردي مدمج يحفظ الحالة مباشرة بلمسة واحدة في جهاز المستخدم.
-- **محرك الحفظ الفوري (`StatusesViewModel.kt`):** دعم حفظ وتنزيل وسائط ونصوص الحالات في مجلد الصور والتنزيلات وتحديث المعرض عبر `MediaScannerConnection` مع إشعار `Snackbar` وتغذية لمسية.
-- **حالة البناء والاختبار:** اجتياز `compileDebugKotlin` واختبارات `testDebugUnitTest` بنسبة 100% وبناء الـ APK بنجاح بحجم **28.47 MB**.
-
-## 11. إنجاز ترقية تجربة البداية والقائمة الجانبية وحجب شاشات التحديث التلقائية (Sigma AutoFlow Refinements)
-- **حجب شاشة "التطبيق محدث":** في `UpdateViewModel.kt` و `FullScreenUpdateShield.kt`، تم تقييد حالة `UpdateUiState.UpToDate` بالفحص اليدوي فقط وضمان بقاء الفحص التلقائي في وضع `Idle`، مما يمنع نهائياً ظهور أي نوافذ منبثقة عند تشغيل التطبيق.
-- **تنقية شاشة الدخول (`SplashAuthScreen.kt`):** إزالة زر "ربط حساب جديد" ونص التذييل بالكامل، وتحديث زر تسجيل الدخول الأساسي بحركة نبضية (`btnPulseScale`) وشعاع ضوئي نيون متوهج (`btnGlowSweep`).
-- **ضبط توقيت وحركات شاشة البداية والدخول:**
-  - شاشة البداية (Splash): ضبط المدة بدقة متناهية إلى 3 ثوانٍ (3000ms) عبر شريط ليزر ورادار مداري وأمواج سونار.
-  - شاشة الدخول (Interactive Login): حركة مستمرة لكافة العناصر (دوران ونبض شعار S السيبراني، تموج لوني متدفق لعناوين Sigma AutoFlow، دوران نواة 3D AI Core وكبسولات الـ HUD العائمة، وشعاع ضوئي على زر الدخول).
-- **إزالة "2.0" من كامل المشروع:** تنظيف وتوحيد الهوية باسم **Sigma AutoFlow** في جميع الشاشات ونوافذ الحوار والقائمة الجانبية وإصدارات الإعدادات.
-- **إصلاح القائمة الجانبية ونقل الزر للهيدر:**
-  - نقل زر فتح القائمة الجانبية من أسفل الشاشة نهائياً إلى شريط الرأس العلوي (Top Header) مدمجاً في هيدر الشاشة الرئيسية (`DashboardScreen.kt`) وفي أعلى الشاشات الأخرى (`MainActivity.kt`).
-  - تطوير القائمة الجانبية (`AppNavigationDrawer.kt`) لتصبح ممتدة (`fillMaxWidth(0.88f)`) وذكية بمؤشرات حية (حصانة 24/7، قفل الـ PIN، والوضع الشبح) مع تصميم Glassmorphic فائق الأناقة.
-- **سلامة لقطات الشاشة:** حذف لقطات الشاشة السابقة نهائياً من الذاكرة وجهاز الهاتف والامتناع الصارم عن التقاط أي صور جديدة.
-- **التثبيت والتشغيل عبر USB:** بناء حزمة `app-debug.apk` بنجاح تام، تثبيتها على الهاتف المتصل `ZD2226MJR7` عبر ADB (`Success`)، وتشغيل التطبيق بنجاح تام (PID 12089) بدون أي أخطاء في Logcat.
-
+## 3. Known Traps & Do-Not-Touch
+- **Strict Single-JID:** يُمنع دمج معرفين داخل `statusJidList`؛ التفاعل يُرسل لـ `msg.key.participant` الأصلي فقط إلى `status@broadcast`.
+- **Dumb Bridge Law:** حظر اتخاذ أي قرار آلي داخل كود Node.js بدون أمر مباشر من Kotlin.
+- **Double-Reply Prevention:** فحص `processedMessageCache` في خدمة الإشعارات قبل إرسال أي رد تلقائي.
+- **Fail-Closed Security:** مفاتيح الجلسة لا تُخزن أبداً بنص واضح، واعتماد `SessionKeystore` المشفر فقط.

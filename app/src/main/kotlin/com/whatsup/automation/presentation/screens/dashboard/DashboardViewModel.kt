@@ -10,6 +10,7 @@ import com.whatsup.automation.domain.model.DashboardStats
 import com.whatsup.automation.data.local.entity.SyncedContactDao
 import com.whatsup.automation.domain.repository.LogRepository
 import com.whatsup.automation.service.ServicePermissionManager
+import com.whatsup.automation.service.WhatsAppForegroundService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
@@ -28,9 +29,9 @@ data class DashboardUiState(
     val isPreviewHidden: Boolean = true,
     val isTerminalExpanded: Boolean = false,
     val terminalLines: List<String> = listOf(
-        "[$] تهيئة محرك الأتمتة المحلي...",
-        "[$] التحقق من الجلسات الآمنة في Android KeyStore...",
-        "[$] نظام Room جاهز للاستقبال والفرز الآلي."
+        "[$] طھظ‡ظٹط¦ط© ظ…ط­ط±ظƒ ط§ظ„ط£طھظ…طھط© ط§ظ„ظ…ط­ظ„ظٹ...",
+        "[$] ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط§ظ„ط¬ظ„ط³ط§طھ ط§ظ„ط¢ظ…ظ†ط© ظپظٹ Android KeyStore...",
+        "[$] ظ†ط¸ط§ظ… Room ط¬ط§ظ‡ط² ظ„ظ„ط§ط³طھظ‚ط¨ط§ظ„ ظˆط§ظ„ظپط±ط² ط§ظ„ط¢ظ„ظٹ."
     )
 )
 
@@ -125,11 +126,11 @@ class DashboardViewModel @Inject constructor(
             whatsAppEngine.connectionState.collect { state ->
                 _uiState.update { current ->
                     val line = when (state) {
-                        is ConnectionState.Connected -> "[$] ✅ تم الاتصال بواتساب بنجاح — المحرك نشط."
-                        is ConnectionState.AwaitingPairing -> "[$] ⏳ في انتظار الاقتران (QR أو Pairing Code)..."
-                        is ConnectionState.Disconnected -> "[$] ⏸️ المحرك في وضع التوقف."
-                        is ConnectionState.Reconnecting -> "[$] 🔄 جارٍ إعادة محاولة الاتصال..."
-                        is ConnectionState.Error -> "[$] ❌ خطأ: ${state.message}"
+                        is ConnectionState.Connected -> "[$] âœ… طھظ… ط§ظ„ط§طھطµط§ظ„ ط¨ظˆط§طھط³ط§ط¨ ط¨ظ†ط¬ط§ط­ â€” ط§ظ„ظ…ط­ط±ظƒ ظ†ط´ط·."
+                        is ConnectionState.AwaitingPairing -> "[$] âڈ³ ظپظٹ ط§ظ†طھط¸ط§ط± ط§ظ„ط§ظ‚طھط±ط§ظ† (QR ط£ظˆ Pairing Code)..."
+                        is ConnectionState.Disconnected -> "[$] âڈ¸ï¸ڈ ط§ظ„ظ…ط­ط±ظƒ ظپظٹ ظˆط¶ط¹ ط§ظ„طھظˆظ‚ظپ."
+                        is ConnectionState.Reconnecting -> "[$] ًں”„ ط¬ط§ط±ظچ ط¥ط¹ط§ط¯ط© ظ…ط­ط§ظˆظ„ط© ط§ظ„ط§طھطµط§ظ„..."
+                        is ConnectionState.Error -> "[$] â‌Œ ط®ط·ط£: ${state.message}"
                     }
                     current.copy(
                         connectionState = state,
@@ -176,7 +177,7 @@ class DashboardViewModel @Inject constructor(
                             deviceContactsManager.getContactDisplayName(log.senderPhone)
                                 ?: deviceContactsManager.getContactDisplayName(cleanDigits)
                         } else null
-                        val displayIdentifier = deviceName ?: if (cleanDigits.length >= 7) "+$cleanDigits" else "محادثة"
+                        val displayIdentifier = deviceName ?: if (cleanDigits.length >= 7) "+$cleanDigits" else "ظ…ط­ط§ط¯ط«ط©"
                         "[$] [$displayIdentifier] -> ${log.actionExecuted}"
                     }
                     current.copy(
@@ -216,7 +217,31 @@ class DashboardViewModel @Inject constructor(
         if (_uiState.value.connectionState is ConnectionState.Connected) {
             whatsAppEngine.toggleAutomationPause()
         } else {
-            whatsAppEngine.startEngine()
+            startAllServices()
         }
+    }
+
+    /**
+     * ط¥ظٹظ‚ط§ظپ ط´ط§ظ…ظ„ ظ„ظ„ظ…ط­ط±ظƒ ظˆط§ظ„ط®ط¯ظ…ط© ط§ظ„ط£ظ…ط§ظ…ظٹط© ظˆظƒطھظ… ط§ظ„ط±ط¯ظˆط¯ ط¨ط§ظ„ظƒط§ظ…ظ„ (Master Kill / Deep Sleep).
+     * ظٹط­ط±ط± ظƒط§ظپط© ظ…ظˆط§ط±ط¯ ط§ظ„ظ…ط¹ط§ظ„ط¬ ظˆط§ظ„ط°ط§ظƒط±ط© ظˆط´ط±ظٹط· ط§ظ„ط¥ط´ط¹ط§ط±ط§طھ ظپظˆط±ظٹط§ظ‹.
+     */
+    fun stopAllServices() {
+        viewModelScope.launch {
+            WhatsAppForegroundService.stop(context)
+            whatsAppEngine.stopEngine()
+            whatsAppEngine.setAutomationPaused(true)
+        }
+    }
+
+    /**
+     * ط¨ط¯ط، ظˆطھط´ط؛ظٹظ„ ط§ظ„ط®ط¯ظ…ط© ط§ظ„ط£ظ…ط§ظ…ظٹط© ظˆظ…ط­ط±ظƒ ط§ظ„ط£طھظ…طھط© ط¨ط§ظ„ظƒط§ظ…ظ„ ط¨ط¶ط؛ط·ط© ظˆط§ط­ط¯ط©.
+     */
+    fun startAllServices() {
+        viewModelScope.launch {
+            WhatsAppForegroundService.start(context)
+            whatsAppEngine.startEngine()
+            whatsAppEngine.setAutomationPaused(false)
+        }
+
     }
 }

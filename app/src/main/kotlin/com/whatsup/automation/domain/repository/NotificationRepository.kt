@@ -10,4 +10,6 @@ interface NotificationRepository {
     suspend fun postNotification(title: String, message: String, type: NotificationType)
     suspend fun markAllAsRead()
     suspend fun clearAll()
+    suspend fun markAsRead(id: String) {}
+    suspend fun deleteNotification(id: String) {}
 }

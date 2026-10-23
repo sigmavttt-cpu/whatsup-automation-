@@ -54,6 +54,8 @@ desktop.ini
 *.log
 logcat.txt
 screen*.png
+.*screenshot*.png
+mobsfscan_report*.json
 /errors/
 /tmp/
 /temp/
@@ -88,3 +90,6 @@ local.properties
 __pycache__/
 *.pyc
 key_remap_fixer.pyw
+.venv-security/
+.venv/
+venv/

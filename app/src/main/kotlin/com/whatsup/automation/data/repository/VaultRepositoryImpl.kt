@@ -36,7 +36,34 @@ class VaultRepositoryImpl @Inject constructor(
     override fun getDeletedCount(): Flow<Int> = vaultDao.getDeletedCount()
 
     override suspend fun saveVaultItem(item: VaultItem) {
-        vaultDao.insertItem(item.toEntity())
+        val existing = vaultDao.getItemById(item.id)
+        val targetPath = item.localFilePath ?: existing?.localFilePath
+        val actualSize = if (!targetPath.isNullOrBlank()) {
+            try {
+                val f = java.io.File(targetPath)
+                if (f.exists() && f.length() > 0L) f.length() else item.fileSizeBytes
+            } catch (_: Exception) {
+                item.fileSizeBytes
+            }
+        } else {
+            item.fileSizeBytes
+        }
+
+        if (existing != null) {
+            val merged = existing.copy(
+                isViewOnce = existing.isViewOnce || item.isViewOnce,
+                localFilePath = targetPath,
+                mediaType = if (item.mediaType != VaultMediaType.TEXT) item.mediaType.name else existing.mediaType,
+                originalText = if (!item.originalText.isNullOrBlank()) item.originalText else existing.originalText,
+                mimeType = item.mimeType ?: existing.mimeType,
+                fileSizeBytes = if (actualSize > 0L) actualSize else existing.fileSizeBytes,
+                isDeleted = existing.isDeleted || item.isDeleted,
+                isFavorite = existing.isFavorite || item.isFavorite
+            )
+            vaultDao.updateItem(merged)
+        } else {
+            vaultDao.insertItem(item.copy(fileSizeBytes = actualSize).toEntity())
+        }
     }
 
     override suspend fun markMessageAsDeleted(id: String) {

@@ -30,29 +30,6 @@ object ServicePermissionManager {
     }
 
     /**
-     * فحص هل تم تفعيل خدمة إمكانية الوصول (Accessibility Service).
-     */
-    fun isAccessibilityServiceEnabled(context: Context): Boolean {
-        val expectedComponentName = ComponentName(
-            context,
-            WhatsAppAccessibilityService::class.java
-        ).flattenToString()
-
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-
-        val accessibilityEnabled = Settings.Secure.getInt(
-            context.contentResolver,
-            Settings.Secure.ACCESSIBILITY_ENABLED,
-            0
-        )
-
-        return accessibilityEnabled == 1 && enabledServices.contains(expectedComponentName)
-    }
-
-    /**
      * فحص هل تم استثناء التطبيق من قيود توفير الطاقة (Battery Optimization).
      */
     fun isBatteryOptimizationIgnored(context: Context): Boolean {
@@ -113,18 +90,6 @@ object ServicePermissionManager {
                 context.startActivity(fallbackIntent)
             } catch (_: Exception) {}
         }
-    }
-
-    /**
-     * فتح صفحة إعدادات إمكانية الوصول في أندرويد.
-     */
-    fun openAccessibilitySettings(context: Context) {
-        try {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-        } catch (_: Exception) {}
     }
 
     /**

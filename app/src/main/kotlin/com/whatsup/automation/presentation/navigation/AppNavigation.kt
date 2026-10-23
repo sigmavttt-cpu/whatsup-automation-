@@ -91,20 +91,20 @@ sealed class Screen(
     )
 
     // المسارات الفرعية للتوافق والتوجيه المباشر
-    data object Vault : Screen("vault", "المسترجعات", Icons.Filled.DeleteSweep, Icons.Outlined.DeleteSweep)
+    data object Vault : Screen("vault", "المحذوفات", Icons.Filled.DeleteSweep, Icons.Outlined.DeleteSweep)
     data object Groups : Screen("groups", "المجموعات", Icons.Filled.Groups, Icons.Outlined.Groups)
     data object Rules : Screen("rules", "القواعد", Icons.Filled.Bolt, Icons.Outlined.Bolt)
     data object Statuses : Screen("statuses", "الحالات", Icons.Filled.AutoStories, Icons.Outlined.AutoStories)
-    data object Analytics : Screen("analytics", "الإحصائيات", Icons.Filled.BarChart, Icons.Outlined.BarChart)
     data object Pairing : Screen("pairing", "الربط", Icons.Filled.QrCode2, Icons.Outlined.QrCode2)
     data object Logs : Screen("logs", "السجلات", Icons.Filled.Tune, Icons.Outlined.Tune)
+    data object Notifications : Screen("notifications", "الإشعارات", Icons.Filled.Notifications, Icons.Outlined.Notifications)
 }
 
 val bottomNavItems = listOf(
     Screen.Dashboard,
     Screen.Statuses,
     Screen.Automation,
-    Screen.Pairing,
+    Screen.Vault,
     Screen.Settings
 )
 
@@ -192,72 +192,68 @@ fun ModernBottomNavBar(
                     Screen.Dashboard -> "الرئيسية: لوحة التحكم وحالة المحرك الحية"
                     Screen.Statuses -> "الحالات: مشاهدة الحالات والإعجاب التلقائي وحفظها"
                     Screen.Automation -> "الأتمتة: محرك الردود الذكية والقواعد والحملات"
+                    Screen.Vault -> "المحذوفات: كاشف النصوص المحذوفة لدى الجميع والرسائل المعدلة سراً"
                     Screen.Pairing -> "الربط: مسح الباركود QR وربط حساب الواتساب"
                     Screen.Settings -> "الإعدادات: الأمان والـ PIN والنسخ الاحتياطي"
                     else -> screen.title
                 }
 
-                com.whatsup.automation.presentation.components.AppTooltipBox(
-                    tooltipText = tooltipText,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .scale(scale)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(bgPillBrush)
-                            .then(
-                                if (isSelected) {
-                                    Modifier.border(1.2.dp, Color(0x6600E676), RoundedCornerShape(16.dp))
-                                } else Modifier
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                if (!isSelected) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .scale(scale)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(bgPillBrush)
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(1.2.dp, Color(0x6600E676), RoundedCornerShape(16.dp))
+                            } else Modifier
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (!isSelected) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
                                     }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
-                            .padding(vertical = 6.dp, horizontal = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                contentDescription = screen.title,
-                                tint = iconTint,
-                                modifier = Modifier.size(22.dp)
-                            )
-
-                            Text(
-                                text = screen.title,
-                                fontSize = 11.5.sp,
-                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                color = if (isSelected) WhatsAppGreenLight else TextSecondary,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-
-                            // مؤشر كبسولي نشط متوهج
-                            Box(
-                                modifier = Modifier
-                                    .size(width = if (isSelected) 16.dp else 0.dp, height = if (isSelected) 3.dp else 0.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(if (isSelected) WhatsAppGreenLight else Color.Transparent)
-                            )
                         }
+                        .padding(vertical = 6.dp, horizontal = 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                            contentDescription = screen.title,
+                            tint = iconTint,
+                            modifier = Modifier.size(22.dp)
+                        )
+
+                        Text(
+                            text = screen.title,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            color = if (isSelected) WhatsAppGreenLight else TextSecondary,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+
+                        // مؤشر كبسولي نشط متوهج
+                        Box(
+                            modifier = Modifier
+                                .size(width = if (isSelected) 16.dp else 0.dp, height = if (isSelected) 3.dp else 0.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (isSelected) WhatsAppGreenLight else Color.Transparent)
+                        )
                     }
                 }
             }

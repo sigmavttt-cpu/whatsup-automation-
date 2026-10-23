@@ -29,8 +29,9 @@ data class PairingUiState(
     val qrCodePayload: String? = null,
     val pairingCode: String? = null,
     val codeCountdownSeconds: Int = 0,
+    val retryCooldownSeconds: Int = 0,
+    val isCleaningData: Boolean = false,
     val isNotificationListenerActive: Boolean = false,
-    val isAccessibilityActive: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
     val hasContactsPermission: Boolean = false,
     val selectedCountry: CountryCode = CountryCodeRepository.defaultCountry,
@@ -38,7 +39,9 @@ data class PairingUiState(
     val phoneNumberInput: String = "",
     val isLoading: Boolean = false,
     val isPairedSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val codeFailureCount: Int = 0,
+    val isAutoSwitchedToQr: Boolean = false
 )
 
 @HiltViewModel
@@ -54,6 +57,37 @@ class PairingViewModel @Inject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private var countdownJob: kotlinx.coroutines.Job? = null
+    private var cooldownJob: kotlinx.coroutines.Job? = null
+
+    fun startCooldown(seconds: Int) {
+        cooldownJob?.cancel()
+        _uiState.update { it.copy(retryCooldownSeconds = seconds) }
+        cooldownJob = viewModelScope.launch {
+            for (sec in (seconds - 1) downTo 0) {
+                delay(1000L)
+                _uiState.update { it.copy(retryCooldownSeconds = sec) }
+            }
+        }
+    }
+
+    fun cleanStaleData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCleaningData = true) }
+            countdownJob?.cancel()
+            cooldownJob?.cancel()
+            whatsAppEngine.cleanStalePairingData()
+            delay(500L)
+            _uiState.update { it.copy(
+                isCleaningData = false,
+                isLoading = false,
+                pairingCode = null,
+                codeCountdownSeconds = 0,
+                retryCooldownSeconds = 0,
+                errorMessage = null,
+                codeFailureCount = 0
+            ) }
+        }
+    }
 
     fun refreshConnection(context: Context) {
         viewModelScope.launch {
@@ -65,9 +99,18 @@ class PairingViewModel @Inject constructor(
         }
     }
 
+    fun refreshStatus() {
+        refreshConnection(appContext)
+    }
+
     init {
         // فحص الصلاحيات عند بدء الشاشة
         checkAllPermissions(appContext)
+
+        val savedPhone = sessionKeystore.getSessionPhone()
+        if (!savedPhone.isNullOrBlank()) {
+            _uiState.update { it.copy(phoneNumberInput = savedPhone) }
+        }
 
         // مراقبة حالة الاتصال من المحرك
         viewModelScope.launch {
@@ -101,7 +144,8 @@ class PairingViewModel @Inject constructor(
                         pairingCode = code,
                         isLoading = false,
                         errorMessage = null,
-                        codeCountdownSeconds = 60
+                        codeCountdownSeconds = 60,
+                        codeFailureCount = 0
                     ) }
                     countdownJob = viewModelScope.launch {
                         for (sec in 59 downTo 0) {
@@ -124,6 +168,45 @@ class PairingViewModel @Inject constructor(
                 }
             }
         }
+        // مراقبة أخطاء طلب الاقتران مع تفعيل التحويل الذكي التلقائي لـ QR عند الفشل المتكرر
+        viewModelScope.launch {
+            whatsAppEngine.pairingError.collect { errorMsg ->
+                countdownJob?.cancel()
+                val newFailCount = _uiState.value.codeFailureCount + 1
+                val cooldown = if (newFailCount >= 2) 60 else 30
+                startCooldown(cooldown)
+                if (newFailCount >= 2 && _uiState.value.selectedMethod == PairingMethod.PAIRING_CODE) {
+                    whatsAppEngine.generateNewQr()
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        pairingCode = null,
+                        codeCountdownSeconds = 0,
+                        codeFailureCount = newFailCount,
+                        selectedMethod = PairingMethod.QR_CODE,
+                        isAutoSwitchedToQr = true,
+                        errorMessage = "تعذر طلب كود الاقتران مرتين (قد يكون الرقم مقيداً مؤقتاً من واتساب). تم تفعيل رمز الاستجابة السريعة (QR) تلقائياً مع بدء عداد انتظار ($cooldown ثانية) لحماية الحساب."
+                    ) }
+                } else {
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        pairingCode = null,
+                        codeCountdownSeconds = 0,
+                        codeFailureCount = newFailCount,
+                        errorMessage = "$errorMsg (يرجى الانتظار $cooldown ثانية)"
+                    ) }
+                }
+            }
+        }
+    }
+
+    fun dismissError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun retryPairing() {
+        if (_uiState.value.retryCooldownSeconds > 0) return
+        dismissError()
+        requestPairingCode()
     }
 
     fun selectMethod(method: PairingMethod) {
@@ -134,6 +217,13 @@ class PairingViewModel @Inject constructor(
     }
 
     fun requestPairingCode() {
+        if (_uiState.value.retryCooldownSeconds > 0) {
+            _uiState.update { it.copy(
+                errorMessage = "يرجى الانتظار (${_uiState.value.retryCooldownSeconds} ثانية) قبل المحاولة لتجنب حظر الرقم من واتساب."
+            ) }
+            return
+        }
+
         val cleanNational = _uiState.value.nationalPhoneNumber.filter { it.isDigit() }.trimStart('0')
         val dialDigits = _uiState.value.selectedCountry.dialCode.filter { it.isDigit() }
         val sanitizedPhone = "$dialDigits$cleanNational"
@@ -156,13 +246,30 @@ class PairingViewModel @Inject constructor(
         viewModelScope.launch {
             delay(25_000L)
             if (_uiState.value.isLoading && _uiState.value.pairingCode == null) {
-                _uiState.update { current ->
-                    if (current.isLoading && current.pairingCode == null) {
+                val newFailCount = _uiState.value.codeFailureCount + 1
+                val cooldown = if (newFailCount >= 2) 60 else 30
+                startCooldown(cooldown)
+                if (newFailCount >= 2 && _uiState.value.selectedMethod == PairingMethod.PAIRING_CODE) {
+                    whatsAppEngine.generateNewQr()
+                    _uiState.update { current ->
                         current.copy(
                             isLoading = false,
-                            errorMessage = "انتهت مهلة طلب كود الاقتران. تأكد من اتصال الإنترنت وصحة الرقم ثم أعد المحاولة."
+                            codeFailureCount = newFailCount,
+                            selectedMethod = PairingMethod.QR_CODE,
+                            isAutoSwitchedToQr = true,
+                            errorMessage = "انتهت مهلة طلب كود الاقتران مرتين. تم تفعيل رمز الاستجابة السريعة (QR) تلقائياً مع بدء عداد انتظار ($cooldown ثانية) لحماية الحساب."
                         )
-                    } else current
+                    }
+                } else {
+                    _uiState.update { current ->
+                        if (current.isLoading && current.pairingCode == null) {
+                            current.copy(
+                                isLoading = false,
+                                codeFailureCount = newFailCount,
+                                errorMessage = "انتهت مهلة طلب كود الاقتران. تأكد من اتصال الإنترنت وصحة الرقم ثم أعد المحاولة بعد انتهاء عداد الانتظار ($cooldown ثانية)."
+                            )
+                        } else current
+                    }
                 }
             }
         }
@@ -250,7 +357,6 @@ class PairingViewModel @Inject constructor(
      */
     fun checkAllPermissions(context: Context) {
         val isNotif = ServicePermissionManager.isNotificationListenerEnabled(context)
-        val isAccess = ServicePermissionManager.isAccessibilityServiceEnabled(context)
         val isBattery = ServicePermissionManager.isBatteryOptimizationIgnored(context)
         val hasContacts = ServicePermissionManager.hasContactsPermissions(context)
 
@@ -263,7 +369,6 @@ class PairingViewModel @Inject constructor(
 
         _uiState.update { it.copy(
             isNotificationListenerActive = isNotif,
-            isAccessibilityActive = isAccess,
             isBatteryOptimizationIgnored = isBattery,
             hasContactsPermission = hasContacts,
             isPairedSuccess = isBaileysConnected,
@@ -273,10 +378,6 @@ class PairingViewModel @Inject constructor(
 
     fun openNotificationSettings(context: Context) {
         ServicePermissionManager.openNotificationListenerSettings(context)
-    }
-
-    fun openAccessibilitySettings(context: Context) {
-        ServicePermissionManager.openAccessibilitySettings(context)
     }
 
     fun openBatterySettings(context: Context) {

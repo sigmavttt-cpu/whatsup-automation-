@@ -75,8 +75,11 @@ class ServiceHealthMonitor @Inject constructor(
     private fun startMonitoringLoop() {
         scope.launch {
             while (isActive) {
-                updateSnapshot(isServiceRunning = serviceStartTime > 0)
-                delay(3000) // فحص دوري كل 3 ثوانٍ
+                val isRunning = serviceStartTime > 0
+                updateSnapshot(isServiceRunning = isRunning)
+                // إذا كانت الخدمة متوقفة تماماً نباعد الفحص إلى 15 ثانية لتوفير البطارية ومنع إيقاظ المعالج
+                val nextDelay = if (isRunning) 4000L else 15000L
+                delay(nextDelay)
             }
         }
     }

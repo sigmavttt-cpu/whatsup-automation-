@@ -2,7 +2,7 @@ package com.whatsup.automation.presentation.theme
 
 import android.app.Activity
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
@@ -10,11 +10,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val LightColorScheme = lightColorScheme(
+private val DarkColorScheme = darkColorScheme(
     primary = WhatsAppGreen,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8F5E9),
-    onPrimaryContainer = WhatsAppGreenDark,
+    primaryContainer = DarkSurface,
+    onPrimaryContainer = WhatsAppGreenLight,
     secondary = WhatsAppGreenDark,
     onSecondary = Color.White,
     background = DarkBgPrimary,
@@ -23,6 +23,11 @@ private val LightColorScheme = lightColorScheme(
     onSurface = TextPrimary,
     surfaceVariant = DarkBgSecondary,
     onSurfaceVariant = TextSecondary,
+    surfaceContainer = DarkSurface,
+    surfaceContainerHigh = DarkBgSecondary,
+    surfaceContainerHighest = DarkBgSecondary,
+    surfaceContainerLow = DarkBgPrimary,
+    surfaceContainerLowest = DarkBgPrimary,
     error = RoseError,
     onError = Color.White
 )
@@ -45,7 +50,7 @@ fun WhatsUpTheme(
     }
 
     MaterialTheme(
-        colorScheme = LightColorScheme,
+        colorScheme = DarkColorScheme,
         typography = Typography,
         content = content
     )

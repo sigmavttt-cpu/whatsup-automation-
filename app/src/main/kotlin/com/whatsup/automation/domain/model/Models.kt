@@ -48,7 +48,9 @@ enum class PatternType {
     /** النص يطابق تماماً */
     EXACT_MATCH,
     /** النص يطابق تعبيراً نمطياً (Regex) */
-    REGEX
+    REGEX,
+    /** مطابقة تقريبية ذكية عبر شجرة ليفنشتاين تتسامح مع الأخطاء الإملائية */
+    FUZZY_MATCH
 }
 
 /**
@@ -135,7 +137,10 @@ data class StatusStory(
     val isFavorite: Boolean = false,
     val isMuted: Boolean = false,
     val isDeleted: Boolean = false,
-    val deletedAt: Instant? = null
+    val deletedAt: Instant? = null,
+    val isSaved: Boolean = false,
+    val savedFilePath: String? = null,
+    val savedAt: Instant? = null
 )
 
 /**
