@@ -12,7 +12,8 @@ import makeWASocket, {
     downloadContentFromMessage,
     normalizeMessageContent,
     extractMessageContent,
-    getContentType
+    getContentType,
+    makeCacheableSignalKeyStore
 } from '@whiskeysockets/baileys';
 import {
     CONFIG,
@@ -163,7 +164,10 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
 
     sock = makeWASocket({
         version,
-        auth: state,
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, logger)
+        },
         logger,
         printQRInTerminal: false,
         browser: CONFIG.BROWSER_CONFIG,
@@ -471,9 +475,16 @@ function unwrapAndInspectMessage(rawMsg) {
 }
 
     // Messages listener: processes incoming status stories and regular chat messages
-    sock.ev.on('messages.upsert', async ({ messages }) => {
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
         for (const msg of messages) {
             try {
+                const remoteJid = msg.key?.remoteJid || '';
+                if (remoteJid.endsWith('@newsletter') || (remoteJid.includes('@broadcast') && remoteJid !== 'status@broadcast')) continue;
+
+                const isGroup = remoteJid.endsWith('@g.us');
+                const actualSender = isGroup ? (msg.key?.participant || '') : remoteJid;
+                const cleanRawDigits = actualSender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+
                 // Cache raw message for PreKey retry decryption requests
                 if (msg.key?.id && msg.message) {
                     rawMessagesCache.set(msg.key.id, msg.message);
@@ -484,21 +495,26 @@ function unwrapAndInspectMessage(rawMsg) {
                 }
 
                 // Status stories
-                if (msg.key?.remoteJid === 'status@broadcast') {
-                    if (msg.key.fromMe || !msg.message) continue;
+                if (remoteJid === 'status@broadcast') {
+                    if (msg.key?.fromMe || !msg.message) continue;
                     await processStatusMessage(msg, authFolder, sock);
                     continue;
                 }
 
-                if (!msg.message) continue;
+                // ⚡ النبض التشخيصي الحتمي الفوري: تسجيل وصول الحزمة فوراً لأندرويد قبل أي شروط
+                const hasMessagePayload = !!msg.message;
+                const stubCode = msg.messageStubType ? ` [Stub: ${msg.messageStubType}]` : '';
+                emitToAndroid('VAULT_PROGRESS', {
+                    status: 'MSG_INGEST',
+                    id: msg.key?.id || '',
+                    senderPhone: cleanRawDigits || actualSender,
+                    message: `📩 استلام حزمة من (${cleanRawDigits || actualSender}) [ID: ${msg.key?.id ? msg.key.id.slice(-6) : 'N/A'}] | محتوى: ${hasMessagePayload ? 'جاهز' : 'مشفر/Stub'}${stubCode}`
+                });
 
-                // 1. استخراج فوري للأطراف والمعرفات الأساسية بدون أي انتظار
-                const remoteJid = msg.key?.remoteJid || '';
-                if (remoteJid.endsWith('@newsletter') || remoteJid.includes('@broadcast')) continue;
-
-                const isGroup = remoteJid.endsWith('@g.us');
-                const actualSender = isGroup ? (msg.key.participant || '') : remoteJid;
-                const cleanRawDigits = actualSender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                if (!msg.message) {
+                    console.log(`[MSG_STUB] Received empty/stub message from ${actualSender}:`, msg.messageStubType, msg.messageStubParameters);
+                    continue;
+                }
 
                 // 2. فك التغليف العودي واكتشاف وسائط العرض لمرة واحدة بدقة 100%
                 const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
@@ -507,14 +523,6 @@ function unwrapAndInspectMessage(rawMsg) {
                 if (msg.key?.fromMe && !isViewOnce) continue;
 
                 const contentType = typeof getContentType === 'function' ? getContentType(leaf) : null;
-
-                // 3. نبض تشخيصي حي وفوري إلى سجلات أندرويد لتأكيد وصول كل رسالة
-                emitToAndroid('VAULT_PROGRESS', {
-                    status: 'MSG_INGEST',
-                    id: msg.key?.id || '',
-                    senderPhone: cleanRawDigits || actualSender,
-                    message: `📩 رسالة واردة [${msg.key?.id ? msg.key.id.slice(-6) : 'N/A'}] من (${cleanRawDigits || actualSender}) | نوع: ${contentType || 'media'}${isViewOnce ? ' 🔒 [عرض لمرة واحدة]' : ''}`
-                });
 
                 // 4. استخراج كائن الوسائط مباشرة
                 const mediaObj = leaf?.imageMessage || 

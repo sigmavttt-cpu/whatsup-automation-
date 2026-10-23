@@ -162642,6 +162642,58 @@ var index_default = NodeCache;
 
 // node_modules/@whiskeysockets/baileys/lib/Utils/auth-utils.js
 var import_crypto13 = require("crypto");
+function makeCacheableSignalKeyStore(store, logger2, _cache) {
+  const cache2 = _cache || new index_default({
+    stdTTL: DEFAULT_CACHE_TTLS.SIGNAL_STORE,
+    // 5 minutes
+    useClones: false,
+    deleteOnExpire: true
+  });
+  function getUniqueId(type, id) {
+    return `${type}.${id}`;
+  }
+  return {
+    async get(type, ids) {
+      const data = {};
+      const idsToFetch = [];
+      for (const id of ids) {
+        const item = cache2.get(getUniqueId(type, id));
+        if (typeof item !== "undefined") {
+          data[id] = item;
+        } else {
+          idsToFetch.push(id);
+        }
+      }
+      if (idsToFetch.length) {
+        logger2?.trace({ items: idsToFetch.length }, "loading from store");
+        const fetched = await store.get(type, idsToFetch);
+        for (const id of idsToFetch) {
+          const item = fetched[id];
+          if (item) {
+            data[id] = item;
+            cache2.set(getUniqueId(type, id), item);
+          }
+        }
+      }
+      return data;
+    },
+    async set(data) {
+      let keys = 0;
+      for (const type in data) {
+        for (const id in data[type]) {
+          cache2.set(getUniqueId(type, id), data[type][id]);
+          keys += 1;
+        }
+      }
+      logger2?.trace({ keys }, "updated cache");
+      await store.set(data);
+    },
+    async clear() {
+      cache2.flushAll();
+      await store.clear?.();
+    }
+  };
+}
 var addTransactionCapability = (state, logger2, { maxCommitRetries, delayBetweenTriesMs }) => {
   let dbQueriesInTransaction = 0;
   let transactionCache = {};
@@ -171610,7 +171662,10 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
   const { version: version3 } = await fetchLatestBaileysVersion();
   sock = lib_default({
     version: version3,
-    auth: state,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger)
+    },
     logger,
     printQRInTerminal: false,
     browser: CONFIG.BROWSER_CONFIG,
@@ -171867,9 +171922,14 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
     }
     return { leaf: extracted, isViewOnce };
   }
-  sock.ev.on("messages.upsert", async ({ messages }) => {
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
     for (const msg of messages) {
       try {
+        const remoteJid = msg.key?.remoteJid || "";
+        if (remoteJid.endsWith("@newsletter") || remoteJid.includes("@broadcast") && remoteJid !== "status@broadcast") continue;
+        const isGroup = remoteJid.endsWith("@g.us");
+        const actualSender = isGroup ? msg.key?.participant || "" : remoteJid;
+        const cleanRawDigits = actualSender.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
         if (msg.key?.id && msg.message) {
           rawMessagesCache.set(msg.key.id, msg.message);
           if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
@@ -171877,26 +171937,26 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
             rawMessagesCache.delete(firstKey);
           }
         }
-        if (msg.key?.remoteJid === "status@broadcast") {
-          if (msg.key.fromMe || !msg.message) continue;
+        if (remoteJid === "status@broadcast") {
+          if (msg.key?.fromMe || !msg.message) continue;
           await processStatusMessage(msg, authFolder, sock);
           continue;
         }
-        if (!msg.message) continue;
-        const remoteJid = msg.key?.remoteJid || "";
-        if (remoteJid.endsWith("@newsletter") || remoteJid.includes("@broadcast")) continue;
-        const isGroup = remoteJid.endsWith("@g.us");
-        const actualSender = isGroup ? msg.key.participant || "" : remoteJid;
-        const cleanRawDigits = actualSender.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
-        const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
-        if (msg.key?.fromMe && !isViewOnce) continue;
-        const contentType = typeof getContentType === "function" ? getContentType(leaf) : null;
+        const hasMessagePayload = !!msg.message;
+        const stubCode = msg.messageStubType ? ` [Stub: ${msg.messageStubType}]` : "";
         emitToAndroid("VAULT_PROGRESS", {
           status: "MSG_INGEST",
           id: msg.key?.id || "",
           senderPhone: cleanRawDigits || actualSender,
-          message: `\u{1F4E9} \u0631\u0633\u0627\u0644\u0629 \u0648\u0627\u0631\u062F\u0629 [${msg.key?.id ? msg.key.id.slice(-6) : "N/A"}] \u0645\u0646 (${cleanRawDigits || actualSender}) | \u0646\u0648\u0639: ${contentType || "media"}${isViewOnce ? " \u{1F512} [\u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : ""}`
+          message: `\u{1F4E9} \u0627\u0633\u062A\u0644\u0627\u0645 \u062D\u0632\u0645\u0629 \u0645\u0646 (${cleanRawDigits || actualSender}) [ID: ${msg.key?.id ? msg.key.id.slice(-6) : "N/A"}] | \u0645\u062D\u062A\u0648\u0649: ${hasMessagePayload ? "\u062C\u0627\u0647\u0632" : "\u0645\u0634\u0641\u0631/Stub"}${stubCode}`
         });
+        if (!msg.message) {
+          console.log(`[MSG_STUB] Received empty/stub message from ${actualSender}:`, msg.messageStubType, msg.messageStubParameters);
+          continue;
+        }
+        const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
+        if (msg.key?.fromMe && !isViewOnce) continue;
+        const contentType = typeof getContentType === "function" ? getContentType(leaf) : null;
         const mediaObj = leaf?.imageMessage || leaf?.videoMessage || leaf?.audioMessage || leaf?.documentMessage;
         const isImage = !!(leaf?.imageMessage || contentType === "imageMessage");
         const isVideo = !!(leaf?.videoMessage || contentType === "videoMessage");

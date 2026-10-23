@@ -21,6 +21,11 @@ if (-not (Test-Path $apkPath)) {
     exit 1
 }
 
+Write-Host "[INFO] Ensuring ADB server & device ready..." -ForegroundColor Cyan
+& $adbPath start-server | Out-Null
+Start-Sleep -Seconds 2
+& $adbPath wait-for-device
+
 Write-Host "[INFO] Installing APK on device..." -ForegroundColor Cyan
 & $adbPath install -r -d $apkPath
 

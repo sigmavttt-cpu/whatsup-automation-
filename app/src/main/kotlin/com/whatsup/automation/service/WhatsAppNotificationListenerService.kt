@@ -116,6 +116,15 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
         // السيادة المطلقة لمحرك Baileys JID:
         // إذا كان محرك Baileys متصلاً أو كان الإشعار يحمل اسماً فقط بدون أرقام (أقل من 7 خانات)،
         // يُحظر حجز الرسالة عبر الإشعارات وتُترك كلياً لمحرك Baileys JID الذي يملك الرقم الفعلي الموثوق 100%.
+        val isMediaIndicator = text.contains("صورة") || text.contains("Photo", ignoreCase = true) || 
+                               text.contains("فيديو") || text.contains("Video", ignoreCase = true) ||
+                               text.contains("عرض لمرة واحدة") || text.contains("View Once", ignoreCase = true) ||
+                               title.contains("عرض لمرة واحدة")
+
+        if (isMediaIndicator) {
+            whatsAppEngine.logDiagnosticEvent("NOTIF_MEDIA", "🔔 رصد إشعار وسائط: $title ($senderPhone) -> \"$text\"")
+        }
+
         if (whatsAppEngine.isMasterEngineConnected() || phoneDigits.length < 7) {
             return
         }

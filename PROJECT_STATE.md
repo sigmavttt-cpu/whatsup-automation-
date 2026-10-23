@@ -1,8 +1,9 @@
 # حالة مشروع WhatsUp Automation (PROJECT_STATE.md)
-*آخر تحديث: 2026-10-23 | الحالة التشغيلية: إصلاح شامل وجذري لمحرك العرض لمرة واحدة (Anti-View-Once) وفك التغليف العودي، القضاء على خطأ ReferenceError، وربط الخزينة بسجل النشاط وقاعدة البيانات Room*
+*آخر تحديث: 2026-10-24 | الحالة التشغيلية: تفعيل makeCacheableSignalKeyStore لمنع انهيار جلسات التشفير، وإطلاق النبض الفوري للرسائل الواردة، وتثبيت شبكة أمان رصد إشعارات وسائط العرض لمرة واحدة*
 
 ## 1. Current Active Architecture (Map of Key Files)
-- **Engine Bridge:** `app/src/main/assets/nodejs-project/index.js` & `media-downloader.js` (Recursive `unwrapAndInspectMessage` covering `deviceSentMessage`, `ephemeralMessage`, `viewOnceMessageV2` up to 10 depths; triple fallback downloader; zero uncaught exceptions in `messages.upsert`).
+- **Engine Bridge:** `app/src/main/assets/nodejs-project/index.js` & `media-downloader.js` (`makeCacheableSignalKeyStore` in-memory key cache to prevent Libsignal session drops; recursive unwrap; zero silent drops).
+- **Notification Fallback:** `app/src/main/kotlin/com/whatsup/automation/service/WhatsAppNotificationListenerService.kt` (Active detection of view-once and media notification pulses).
 - **LID Resolver:** `app/src/main/assets/nodejs-project/lid-resolver.js` (L145-L165: Non-blocking pure silent resolver, purged invalid onWhatsApp USync queries).
 - **Foreground Core:** `app/src/main/kotlin/com/whatsup/automation/service/WhatsAppForegroundService.kt` (L85-L210: 24/7 Resilience & WakeLock).
 - **Engine Controller:** `app/src/main/kotlin/com/whatsup/automation/data/engine/WhatsAppEngine.kt` (Direct link between `VAULT_MEDIA_CAPTURED` and `logRepository.insertLog` with `LogStatus.SUCCESS`; instant diagnostic logging).
@@ -12,6 +13,11 @@
 - **Skills Directory:** `.agents/skills/` (`strict-evidence-debug`, `baileys-bridge-guard`, `compose-mvi-architect`, `android-logcat-analyzer`, `room-sqlite-migration-guard`, `kotlin-coroutines-flow-expert`, `baileys-anti-ban-protocol`, `android-battery-wakelock-optimizer`).
 
 ## 2. Last 5 Verified Changes
+1. **Signal Session Key Caching & Multi-Layer Media Protection:**
+   - **`makeCacheableSignalKeyStore` Integration:** تزويد `makeWASocket` في `index.js` بمخزن المفاتيح الكاشي `makeCacheableSignalKeyStore(state.keys, logger)` لمنع التنافس أثناء القراءة من القرص وحماية جلسات `Libsignal` من الانهيار (`Closing session`).
+   - **Instant Top-Level MSG_INGEST Pulse:** إعادة هيكلة `sock.ev.on('messages.upsert')` لبث نبض `MSG_INGEST` في اللحظة الأولى لوصول أي حزمة رسالة قبل أي فحص أو شروط، لمنع إسقاط الرسائل المشفرة بصمت.
+   - **Notification Safety Net:** إضافة كاشف وسائط في `WhatsAppNotificationListenerService.kt` لتوثيق إشعارات الصور ومقاطع الفيديو وسائط العرض لمرة واحدة في السجل التشخيصي تلقائياً.
+   - **Verification:** تجميع `bundle.cjs` بنجاح، بناء `app-debug.apk` بنجاح (`BUILD SUCCESSFUL in 5m 33s`).
 1. **Radical Anti-View-Once Pipeline Hardening & Dual-Store Sync:**
    - **Recursive Message Unwrapping:** بناء دالة `unwrapAndInspectMessage` في `index.js` لفك كافة طبقات التغليف العودية (`deviceSentMessage`, `ephemeralMessage`, `viewOnceMessageV2`, `viewOnceMessage`, `documentWithCaptionMessage`) حتى عمق 10 مستويات، مما مكّن رصد وسائط العرض لمرة واحدة بدقة 100% حتى في الرسائل الذاتية والأجهزة المرتبطة.
    - **ReferenceError & Loop Crash Elimination:** إزالة المتغير المكسور `viewOnceObj` في `index.js:643` نهائياً، واستخراج التعليق والنص بأمان من `leaf` و `mediaObj`، مع تغليف حلقة المعالجة بـ `try/catch` لمنع أي استثناء غير متوقع من إسقاط مستمع الأحداث.
