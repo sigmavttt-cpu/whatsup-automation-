@@ -1,23 +1,20 @@
 # حالة مشروع WhatsUp Automation (PROJECT_STATE.md)
-*آخر تحديث: 2026-10-24 | الحالة التشغيلية: تفعيل makeCacheableSignalKeyStore لمنع انهيار جلسات التشفير، وإطلاق النبض الفوري للرسائل الواردة، وتثبيت شبكة أمان رصد إشعارات وسائط العرض لمرة واحدة*
+*آخر تحديث: 2026-10-24 | الحالة التشغيلية: تطهير شامل لكافة أكواد وتصاميم وسائط العرض لمرة واحدة، وتفعيل كاشف تعديل الرسائل (Anti-Edit) مع حفظ النص السابق لكل تعديل، وتحصين كاشف الحذف (Anti-Delete)*
 
 ## 1. Current Active Architecture (Map of Key Files)
-- **Engine Bridge:** `app/src/main/assets/nodejs-project/index.js` & `media-downloader.js` (`makeCacheableSignalKeyStore` in-memory key cache to prevent Libsignal session drops; recursive unwrap; zero silent drops).
-- **Notification Fallback:** `app/src/main/kotlin/com/whatsup/automation/service/WhatsAppNotificationListenerService.kt` (Active detection of view-once and media notification pulses).
-- **LID Resolver:** `app/src/main/assets/nodejs-project/lid-resolver.js` (L145-L165: Non-blocking pure silent resolver, purged invalid onWhatsApp USync queries).
-- **Foreground Core:** `app/src/main/kotlin/com/whatsup/automation/service/WhatsAppForegroundService.kt` (L85-L210: 24/7 Resilience & WakeLock).
-- **Engine Controller:** `app/src/main/kotlin/com/whatsup/automation/data/engine/WhatsAppEngine.kt` (Direct link between `VAULT_MEDIA_CAPTURED` and `logRepository.insertLog` with `LogStatus.SUCCESS`; instant diagnostic logging).
+- **Engine Bridge:** `app/src/main/assets/nodejs-project/index.js` (Cleaned architecture; active detection of `protocolMessage.type === 14` for Message Edits with previous text retrieval, and `protocolMessage.type === 0` for Message Revocation with original text restore).
+- **Foreground Core:** `app/src/main/kotlin/com/whatsup/automation/service/WhatsAppForegroundService.kt` (24/7 Resilience & WakeLock).
+- **Engine Controller:** `app/src/main/kotlin/com/whatsup/automation/data/engine/WhatsAppEngine.kt` (Dedicated handlers for `MESSAGE_EDITED` and `MESSAGE_REVOKED`; saving previous text history to Room DB & Activity Logs).
 - **Storage/DB:** `app/src/main/kotlin/com/whatsup/automation/data/local/AppDatabase.kt` (Room Schema v10, persistent ActivityLog & VaultMediaEntity).
-- **Notifications Hub:** `app/src/main/kotlin/com/whatsup/automation/presentation/screens/notifications/` (`NotificationsScreen.kt`, `NotificationsViewModel.kt`, `NotificationsBentoGrid.kt`, `NotificationFilterChips.kt`, `NotificationCard.kt`).
-- **Vault UI & Media Hub:** `app/src/main/kotlin/com/whatsup/automation/presentation/screens/vault/` (`VaultScreen.kt`, `VaultViewModel.kt`, `VaultMediaTab.kt`, `VaultPreviewDialogs.kt`).
-- **Skills Directory:** `.agents/skills/` (`strict-evidence-debug`, `baileys-bridge-guard`, `compose-mvi-architect`, `android-logcat-analyzer`, `room-sqlite-migration-guard`, `kotlin-coroutines-flow-expert`, `baileys-anti-ban-protocol`, `android-battery-wakelock-optimizer`).
+- **Vault Hub:** `app/src/main/kotlin/com/whatsup/automation/presentation/screens/vault/` (`VaultScreen.kt`, `VaultViewModel.kt`, `VaultTextsTab.kt`, `VaultHubComponents.kt` - purely focused on Deleted Messages & Edited Messages revision history).
 
 ## 2. Last 5 Verified Changes
-1. **Signal Session Key Caching & Multi-Layer Media Protection:**
-   - **`makeCacheableSignalKeyStore` Integration:** تزويد `makeWASocket` في `index.js` بمخزن المفاتيح الكاشي `makeCacheableSignalKeyStore(state.keys, logger)` لمنع التنافس أثناء القراءة من القرص وحماية جلسات `Libsignal` من الانهيار (`Closing session`).
-   - **Instant Top-Level MSG_INGEST Pulse:** إعادة هيكلة `sock.ev.on('messages.upsert')` لبث نبض `MSG_INGEST` في اللحظة الأولى لوصول أي حزمة رسالة قبل أي فحص أو شروط، لمنع إسقاط الرسائل المشفرة بصمت.
-   - **Notification Safety Net:** إضافة كاشف وسائط في `WhatsAppNotificationListenerService.kt` لتوثيق إشعارات الصور ومقاطع الفيديو وسائط العرض لمرة واحدة في السجل التشخيصي تلقائياً.
-   - **Verification:** تجميع `bundle.cjs` بنجاح، بناء `app-debug.apk` بنجاح (`BUILD SUCCESSFUL in 5m 33s`).
+1. **Total View-Once Purge & Anti-Edit Engine Integration (Previous Text History):**
+   - **Backend Purge:** إزالة كافة دوال وفروع وسائط العرض لمرة واحدة (`isViewOnce`, `viewOnceMessage`, `viewOnceMessageV2`) وحذف ملفات الاختبار المتقادمة.
+   - **Anti-Edit Engine:** تفعيل رصد `protocolMessage.type === 14` (MESSAGE_EDIT) في `index.js` واستخراج النص الأصلي قبل التعديل من الذاكرة `rawMessagesCache` وبث حدث `MESSAGE_EDITED` للأندرويد.
+   - **Anti-Delete Engine:** تحصين `protocolMessage.type === 0` (REVOKE) واستعادة النص الأصلي المحذوف وحفظه في جدول الخزينة.
+   - **UI & ViewModel Streamlining:** حذف تبويب `VaultSubTab.MEDIA` ومكون `VaultMediaTab.kt` بالكامل وإعادة توجيه الخزينة للتركيز الحصري على: الرسائل المحذوفة لدى الجميع، والرسائل المعدلة وتاريخ النص السابق.
+   - **Verification:** تجميع `bundle.cjs` (6.5MB) بنجاح، بناء `app-debug.apk` بنجاح (`BUILD SUCCESSFUL`).
 1. **Radical Anti-View-Once Pipeline Hardening & Dual-Store Sync:**
    - **Recursive Message Unwrapping:** بناء دالة `unwrapAndInspectMessage` في `index.js` لفك كافة طبقات التغليف العودية (`deviceSentMessage`, `ephemeralMessage`, `viewOnceMessageV2`, `viewOnceMessage`, `documentWithCaptionMessage`) حتى عمق 10 مستويات، مما مكّن رصد وسائط العرض لمرة واحدة بدقة 100% حتى في الرسائل الذاتية والأجهزة المرتبطة.
    - **ReferenceError & Loop Crash Elimination:** إزالة المتغير المكسور `viewOnceObj` في `index.js:643` نهائياً، واستخراج التعليق والنص بأمان من `leaf` و `mediaObj`، مع تغليف حلقة المعالجة بـ `try/catch` لمنع أي استثناء غير متوقع من إسقاط مستمع الأحداث.

@@ -37,9 +37,8 @@ enum class VaultViewMode {
  */
 enum class VaultSubTab {
     TEXTS,       // 1. نصوص محذوفة (أحمر)
-    EDITED,      // 2. رسائل تم تعديلها (كهرماني/أصفر)
-    AUDIO,       // 3. ملاحظات وتسجيلات صوتية (سيان)
-    MEDIA        // 4. صور ووسائط العرض لمرة واحدة (أخضر زمردي)
+    EDITED,      // 2. رسائل تم تعديلها وحفظ النص السابق (كهرماني/أصفر)
+    AUDIO        // 3. ملاحظات وتسجيلات صوتية محذوفة (سيان)
 }
 
 /**
@@ -169,7 +168,6 @@ class VaultViewModel @Inject constructor(
             VaultSubTab.TEXTS -> textsList
             VaultSubTab.EDITED -> editedList
             VaultSubTab.AUDIO -> audioList
-            VaultSubTab.MEDIA -> mediaList
         }
 
         val userHistory = if (inspected != null) {

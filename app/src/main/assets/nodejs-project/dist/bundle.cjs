@@ -170535,67 +170535,6 @@ var msgRetryCounterCache = {
   delete: (key) => msgRetryCounterMap.delete(key)
 };
 
-// media-downloader.js
-async function downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock2 = null, msg = null) {
-  if (!mediaObj) return null;
-  if (typeof downloadContentFromMessage === "function") {
-    try {
-      const stream5 = await downloadContentFromMessage(mediaObj, mediaTypeLower);
-      const chunks = [];
-      for await (const chunk2 of stream5) {
-        chunks.push(chunk2);
-      }
-      const buffer2 = Buffer.concat(chunks);
-      if (buffer2 && buffer2.length > 0) {
-        return buffer2;
-      }
-    } catch (eStream) {
-      logger.warn(`[MEDIA_DOWNLOADER] Primary stream download (${mediaTypeLower}) failed: ${eStream.message}`);
-    }
-  }
-  if (sock2 && typeof downloadMediaMessage === "function") {
-    try {
-      const syntheticMsg = {
-        key: msg?.key || { id: mediaObj.fileSha256 ? Buffer.from(mediaObj.fileSha256).toString("hex") : "media" },
-        message: { [`${mediaTypeLower}Message`]: mediaObj }
-      };
-      const buffer2 = await downloadMediaMessage(syntheticMsg, "buffer", {}, {
-        logger,
-        reuploadRequest: sock2?.updateMediaMessage ? sock2.updateMediaMessage.bind(sock2) : void 0
-      });
-      if (buffer2 && buffer2.length > 0) {
-        return buffer2;
-      }
-    } catch (eBaileys) {
-      logger.warn(`[MEDIA_DOWNLOADER] Secondary downloadMediaMessage failed: ${eBaileys.message}`);
-    }
-    if (msg && msg.message) {
-      try {
-        const buffer2 = await downloadMediaMessage(msg, "buffer", {}, {
-          logger,
-          reuploadRequest: sock2?.updateMediaMessage ? sock2.updateMediaMessage.bind(sock2) : void 0
-        });
-        if (buffer2 && buffer2.length > 0) {
-          return buffer2;
-        }
-      } catch (_) {
-      }
-    }
-  }
-  if (mediaTypeLower === "image" && mediaObj.jpegThumbnail) {
-    try {
-      const thumbBuffer = Buffer.isBuffer(mediaObj.jpegThumbnail) ? mediaObj.jpegThumbnail : mediaObj.jpegThumbnail.data ? Buffer.from(mediaObj.jpegThumbnail.data) : Buffer.from(mediaObj.jpegThumbnail);
-      if (thumbBuffer && thumbBuffer.length > 50) {
-        logger.warn(`[MEDIA_DOWNLOADER] Using embedded jpegThumbnail fallback (${thumbBuffer.length} bytes)`);
-        return thumbBuffer;
-      }
-    } catch (eThumb) {
-      logger.warn(`[MEDIA_DOWNLOADER] Thumbnail fallback failed: ${eThumb.message}`);
-    }
-  }
-  return null;
-}
-
 // bridge.js
 var import_net = __toESM(require("net"), 1);
 var import_readline = __toESM(require("readline"), 1);
@@ -170792,6 +170731,67 @@ function getLidForPhone(phone) {
 // status-manager.js
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path6 = __toESM(require("path"), 1);
+
+// media-downloader.js
+async function downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock2 = null, msg = null) {
+  if (!mediaObj) return null;
+  if (typeof downloadContentFromMessage === "function") {
+    try {
+      const stream5 = await downloadContentFromMessage(mediaObj, mediaTypeLower);
+      const chunks = [];
+      for await (const chunk2 of stream5) {
+        chunks.push(chunk2);
+      }
+      const buffer2 = Buffer.concat(chunks);
+      if (buffer2 && buffer2.length > 0) {
+        return buffer2;
+      }
+    } catch (eStream) {
+      logger.warn(`[MEDIA_DOWNLOADER] Primary stream download (${mediaTypeLower}) failed: ${eStream.message}`);
+    }
+  }
+  if (sock2 && typeof downloadMediaMessage === "function") {
+    try {
+      const syntheticMsg = {
+        key: msg?.key || { id: mediaObj.fileSha256 ? Buffer.from(mediaObj.fileSha256).toString("hex") : "media" },
+        message: { [`${mediaTypeLower}Message`]: mediaObj }
+      };
+      const buffer2 = await downloadMediaMessage(syntheticMsg, "buffer", {}, {
+        logger,
+        reuploadRequest: sock2?.updateMediaMessage ? sock2.updateMediaMessage.bind(sock2) : void 0
+      });
+      if (buffer2 && buffer2.length > 0) {
+        return buffer2;
+      }
+    } catch (eBaileys) {
+      logger.warn(`[MEDIA_DOWNLOADER] Secondary downloadMediaMessage failed: ${eBaileys.message}`);
+    }
+    if (msg && msg.message) {
+      try {
+        const buffer2 = await downloadMediaMessage(msg, "buffer", {}, {
+          logger,
+          reuploadRequest: sock2?.updateMediaMessage ? sock2.updateMediaMessage.bind(sock2) : void 0
+        });
+        if (buffer2 && buffer2.length > 0) {
+          return buffer2;
+        }
+      } catch (_) {
+      }
+    }
+  }
+  if (mediaTypeLower === "image" && mediaObj.jpegThumbnail) {
+    try {
+      const thumbBuffer = Buffer.isBuffer(mediaObj.jpegThumbnail) ? mediaObj.jpegThumbnail : mediaObj.jpegThumbnail.data ? Buffer.from(mediaObj.jpegThumbnail.data) : Buffer.from(mediaObj.jpegThumbnail);
+      if (thumbBuffer && thumbBuffer.length > 50) {
+        logger.warn(`[MEDIA_DOWNLOADER] Using embedded jpegThumbnail fallback (${thumbBuffer.length} bytes)`);
+        return thumbBuffer;
+      }
+    } catch (eThumb) {
+      logger.warn(`[MEDIA_DOWNLOADER] Thumbnail fallback failed: ${eThumb.message}`);
+    }
+  }
+  return null;
+}
 
 // tracer.js
 var activeTraces = /* @__PURE__ */ new Map();
@@ -171881,27 +171881,11 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
       }
     }
   });
-  function unwrapAndInspectMessage(rawMsg) {
+  function unwrapMessage(rawMsg) {
     let current = rawMsg;
-    let isViewOnce = false;
     let depth = 0;
     while (current && depth < 10) {
       depth++;
-      if (current.viewOnceMessage?.message) {
-        isViewOnce = true;
-        current = current.viewOnceMessage.message;
-        continue;
-      }
-      if (current.viewOnceMessageV2?.message) {
-        isViewOnce = true;
-        current = current.viewOnceMessageV2.message;
-        continue;
-      }
-      if (current.viewOnceMessageV2Extension?.message) {
-        isViewOnce = true;
-        current = current.viewOnceMessageV2Extension.message;
-        continue;
-      }
       if (current.ephemeralMessage?.message) {
         current = current.ephemeralMessage.message;
         continue;
@@ -171917,10 +171901,7 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
       break;
     }
     const extracted = (typeof extractMessageContent === "function" ? extractMessageContent(current) : null) || (typeof normalizeMessageContent === "function" ? normalizeMessageContent(current) : null) || current;
-    if (extracted?.imageMessage?.viewOnce || extracted?.videoMessage?.viewOnce || extracted?.audioMessage?.viewOnce || extracted?.viewOnce || rawMsg?.imageMessage?.viewOnce || rawMsg?.videoMessage?.viewOnce || rawMsg?.audioMessage?.viewOnce) {
-      isViewOnce = true;
-    }
-    return { leaf: extracted, isViewOnce };
+    return extracted;
   }
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     for (const msg of messages) {
@@ -171930,32 +171911,14 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
         const isGroup = remoteJid.endsWith("@g.us");
         const actualSender = isGroup ? msg.key?.participant || "" : remoteJid;
         const cleanRawDigits = actualSender.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
-        if (msg.key?.id && msg.message) {
-          rawMessagesCache.set(msg.key.id, msg.message);
-          if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
-            const firstKey = rawMessagesCache.keys().next().value;
-            rawMessagesCache.delete(firstKey);
-          }
-        }
         if (remoteJid === "status@broadcast") {
           if (msg.key?.fromMe || !msg.message) continue;
           await processStatusMessage(msg, authFolder, sock);
           continue;
         }
-        const hasMessagePayload = !!msg.message;
-        const stubCode = msg.messageStubType ? ` [Stub: ${msg.messageStubType}]` : "";
-        emitToAndroid("VAULT_PROGRESS", {
-          status: "MSG_INGEST",
-          id: msg.key?.id || "",
-          senderPhone: cleanRawDigits || actualSender,
-          message: `\u{1F4E9} \u0627\u0633\u062A\u0644\u0627\u0645 \u062D\u0632\u0645\u0629 \u0645\u0646 (${cleanRawDigits || actualSender}) [ID: ${msg.key?.id ? msg.key.id.slice(-6) : "N/A"}] | \u0645\u062D\u062A\u0648\u0649: ${hasMessagePayload ? "\u062C\u0627\u0647\u0632" : "\u0645\u0634\u0641\u0631/Stub"}${stubCode}`
-        });
-        if (!msg.message) {
-          console.log(`[MSG_STUB] Received empty/stub message from ${actualSender}:`, msg.messageStubType, msg.messageStubParameters);
-          continue;
-        }
-        const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
-        if (msg.key?.fromMe && !isViewOnce) continue;
+        if (!msg.message) continue;
+        if (msg.key?.fromMe) continue;
+        const leaf = unwrapMessage(msg.message);
         const contentType = typeof getContentType === "function" ? getContentType(leaf) : null;
         const mediaObj = leaf?.imageMessage || leaf?.videoMessage || leaf?.audioMessage || leaf?.documentMessage;
         const isImage = !!(leaf?.imageMessage || contentType === "imageMessage");
@@ -171964,84 +171927,6 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
         const isDoc = !!(leaf?.documentMessage || contentType === "documentMessage");
         const hasMedia = !!mediaObj || isImage || isVideo || isAudio || isDoc;
         const mediaType = isImage ? "IMAGE" : isVideo ? "VIDEO" : isAudio ? "AUDIO" : isDoc ? "DOCUMENT" : "NONE";
-        const mediaTypeLower = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : isDoc ? "document" : "image";
-        const ext = isImage ? "jpg" : isVideo ? "mp4" : isAudio ? "ogg" : "bin";
-        const mime = mediaObj?.mimetype || (isImage ? "image/jpeg" : isVideo ? "video/mp4" : isAudio ? "audio/ogg" : "application/octet-stream");
-        if (hasMedia && mediaObj && isViewOnce) {
-          const vaultDir = import_path7.default.join(authFolder, "..", "vault_media");
-          try {
-            if (!import_fs6.default.existsSync(vaultDir)) import_fs6.default.mkdirSync(vaultDir, { recursive: true });
-          } catch (eDir) {
-            console.error("[VAULT] Failed to create vault directory:", eDir);
-          }
-          const filePath = import_path7.default.join(vaultDir, `viewonce_${msg.key.id}.${ext}`);
-          emitToAndroid("VAULT_PROGRESS", {
-            status: "DETECTED",
-            id: msg.key.id,
-            senderPhone: cleanRawDigits || actualSender,
-            mediaType,
-            message: `\u{1F512} \u062A\u0645 \u0631\u0635\u062F ${mediaType === "IMAGE" ? "\u0635\u0648\u0631\u0629" : "\u0648\u0633\u0627\u0626\u0637"} \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0645\u0646 ${cleanRawDigits || actualSender}\u060C \u062C\u0627\u0631\u064A \u0641\u0643 \u0627\u0644\u062A\u0634\u0641\u064A\u0631 \u0648\u0627\u0644\u062A\u0646\u0632\u064A\u0644...`
-          });
-          (async () => {
-            let buffer2 = null;
-            try {
-              buffer2 = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock, msg);
-            } catch (e1) {
-              console.error(`[VAULT] downloadAndDecryptMedia (${mediaTypeLower}) error:`, e1.message);
-            }
-            if (buffer2 && buffer2.length > 0) {
-              try {
-                import_fs6.default.writeFileSync(filePath, buffer2);
-                console.log(`[VAULT] View-Once captured successfully: ${filePath} (${buffer2.length} bytes, type=${mediaType})`);
-                rawMessagesCache.set(`media_file_${msg.key.id}`, {
-                  localFilePath: filePath,
-                  mimeType: mime,
-                  fileSizeBytes: buffer2.length,
-                  mediaType,
-                  originalText: mediaObj?.caption || ""
-                });
-                const senderDisplay = msg.pushName || getContactName(cleanRawDigits) || cleanRawDigits || actualSender;
-                emitToAndroid("VAULT_MEDIA_CAPTURED", {
-                  id: msg.key.id,
-                  senderPhone: cleanRawDigits || actualSender,
-                  senderName: senderDisplay,
-                  mediaType,
-                  isViewOnce: true,
-                  originalText: mediaObj?.caption || "",
-                  localFilePath: filePath,
-                  mimeType: mime,
-                  fileSizeBytes: buffer2.length,
-                  timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1e3 : Date.now()
-                });
-                emitToAndroid("VAULT_PROGRESS", {
-                  status: "SUCCESS",
-                  id: msg.key.id,
-                  senderPhone: cleanRawDigits || actualSender,
-                  mediaType,
-                  message: `\u2705 \u062A\u0645 \u0641\u0643 \u062A\u0634\u0641\u064A\u0631 \u0648\u062D\u0641\u0638 ${mediaType === "IMAGE" ? "\u0627\u0644\u0635\u0648\u0631\u0629" : "\u0627\u0644\u0648\u0633\u0627\u0626\u0637"} \u0628\u0646\u062C\u0627\u062D \u0641\u064A \u0627\u0644\u062E\u0632\u064A\u0646\u0629 (${Math.round(buffer2.length / 1024)} KB)`
-                });
-              } catch (writeErr) {
-                console.error("[VAULT] Failed to write vault media file:", writeErr);
-                emitToAndroid("VAULT_PROGRESS", {
-                  status: "ERROR",
-                  id: msg.key.id,
-                  senderPhone: cleanRawDigits || actualSender,
-                  message: `\u0641\u0634\u0644 \u0643\u062A\u0627\u0628\u0629 \u0645\u0644\u0641 \u0627\u0644\u0648\u0633\u0627\u0626\u0637 \u0639\u0644\u0649 \u0627\u0644\u0642\u0631\u0635: ${writeErr.message}`
-                });
-              }
-            } else {
-              console.warn("[VAULT] Failed to download media buffer for:", msg.key.id);
-              emitToAndroid("VAULT_PROGRESS", {
-                status: "ERROR",
-                id: msg.key.id,
-                senderPhone: cleanRawDigits || actualSender,
-                message: `\u062A\u0639\u0630\u0631 \u062C\u0644\u0628 \u0645\u0644\u0641 \u0627\u0644\u0648\u0633\u0627\u0626\u0637 (\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0631\u0627\u0628\u0637 \u0645\u0646 \u0648\u0627\u062A\u0633\u0627\u0628 \u0623\u0648 \u062A\u0645 \u0631\u0641\u0636\u0647).`
-              });
-            }
-          })().catch((topErr) => {
-            console.error("[VAULT] Unhandled error in media capture:", topErr);
-          });
-        }
         if (msg.key?.senderPn) {
           linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
         }
@@ -172064,37 +171949,63 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
         const protocolMsg = msg.message?.protocolMessage;
         if (protocolMsg && protocolMsg.type === 0 && protocolMsg.key?.id) {
           const revokedId = protocolMsg.key.id;
-          const cachedMedia = rawMessagesCache.get(`media_file_${revokedId}`);
-          if (cachedMedia) {
-            emitToAndroid("VAULT_MEDIA_CAPTURED", {
-              id: revokedId,
-              senderPhone: cleanPhone || actualSender,
-              senderName: msg.pushName || getContactName(cleanPhone) || "",
-              mediaType: cachedMedia.mediaType,
-              isViewOnce: false,
-              originalText: cachedMedia.originalText,
-              localFilePath: cachedMedia.localFilePath,
-              mimeType: cachedMedia.mimeType,
-              fileSizeBytes: cachedMedia.fileSizeBytes,
-              timestamp: Date.now()
-            });
-          }
+          const cached = rawMessagesCache.get(revokedId);
+          const originalText = cached?.text || (typeof cached === "string" ? cached : "");
           emitToAndroid("MESSAGE_REVOKED", {
             id: revokedId,
             senderPhone: cleanPhone || actualSender,
+            senderName: msg.pushName || getContactName(cleanPhone) || "",
+            originalText,
             timestamp: Date.now()
           });
           continue;
         }
+        if (protocolMsg && protocolMsg.type === 14 && protocolMsg.key?.id) {
+          const editedId = protocolMsg.key.id;
+          const cached = rawMessagesCache.get(editedId);
+          const previousText = cached?.text || (typeof cached === "string" ? cached : "\u0646\u0635 \u063A\u064A\u0631 \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B");
+          const editedLeaf = (typeof extractMessageContent === "function" ? extractMessageContent(protocolMsg.editedMessage) : null) || protocolMsg.editedMessage;
+          const newText = editedLeaf?.conversation || editedLeaf?.extendedTextMessage?.text || editedLeaf?.imageMessage?.caption || editedLeaf?.videoMessage?.caption || "";
+          if (newText) {
+            emitToAndroid("MESSAGE_EDITED", {
+              id: `${editedId}_edit_${Date.now()}`,
+              originalId: editedId,
+              senderPhone: cleanPhone || actualSender,
+              senderName: msg.pushName || getContactName(cleanPhone) || "",
+              previousText,
+              newText,
+              timestamp: Date.now()
+            });
+            rawMessagesCache.set(editedId, {
+              text: newText,
+              senderPhone: cleanPhone || actualSender,
+              senderName: msg.pushName || getContactName(cleanPhone) || "",
+              timestamp: Date.now()
+            });
+          }
+          continue;
+        }
         let text = leaf?.conversation || leaf?.extendedTextMessage?.text || leaf?.imageMessage?.caption || leaf?.videoMessage?.caption || leaf?.documentMessage?.caption || mediaObj?.caption || "";
         if (!text && hasMedia) {
-          if (isImage) text = isViewOnce ? "\u{1F4F7} [\u0635\u0648\u0631\u0629 \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F4F7} [\u0635\u0648\u0631\u0629]";
-          else if (isVideo) text = isViewOnce ? "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648 \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648]";
-          else if (isAudio) text = isViewOnce ? "\u{1F399}\uFE0F [\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A \u0639\u0631\u0636 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629]" : "\u{1F399}\uFE0F [\u0631\u0633\u0627\u0644\u0629 \u0635\u0648\u062A\u064A\u0629]";
+          if (isImage) text = "\u{1F4F7} [\u0635\u0648\u0631\u0629]";
+          else if (isVideo) text = "\u{1F3A5} [\u0641\u064A\u062F\u064A\u0648]";
+          else if (isAudio) text = "\u{1F399}\uFE0F [\u0631\u0633\u0627\u0644\u0629 \u0635\u0648\u062A\u064A\u0629]";
           else if (isDoc) text = "\u{1F4C4} [\u0645\u0633\u062A\u0646\u062F]";
         }
         if (!text || !cleanPhone) continue;
         const senderName = msg.pushName || getContactName(cleanPhone) || "";
+        if (msg.key?.id) {
+          rawMessagesCache.set(msg.key.id, {
+            text,
+            senderPhone: cleanPhone,
+            senderName,
+            timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1e3 : Date.now()
+          });
+          if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
+            const firstKey = rawMessagesCache.keys().next().value;
+            rawMessagesCache.delete(firstKey);
+          }
+        }
         emitToAndroid("INCOMING_MESSAGE", {
           id: msg.key.id,
           senderPhone: cleanPhone,
@@ -172104,7 +172015,7 @@ async function startWhatsAppSession(authFolder = currentAuthFolder) {
           senderName,
           text,
           isGroup,
-          isViewOnce,
+          isViewOnce: false,
           hasMedia,
           mediaType,
           timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1e3 : Date.now()

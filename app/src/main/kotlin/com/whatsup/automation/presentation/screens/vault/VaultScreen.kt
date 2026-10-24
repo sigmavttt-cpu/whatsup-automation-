@@ -173,31 +173,15 @@ fun VaultScreen(
                             item {
                                 VaultHubCategoryCard(
                                     title = "رسائل تم تعديلها",
-                                    subtitle = "كشف النص الأصلي المخفي ومقارنته بالمعدل قبل التعديل",
+                                    subtitle = "كشف النص الأصلي السابق ومقارنته بالمعدل قبل التعديل",
                                     count = uiState.editedCount,
                                     countLabel = "تعديلات",
                                     color = AmberWarning,
                                     icon = Icons.Default.Edit,
-                                    latestInfo = "كشف التعديل واستبدال الكلمات فور وقوعه",
+                                    latestInfo = "كشف التعديل وحفظ النص السابق فور وقوعه",
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         viewModel.navigateToSubPage(VaultSubTab.EDITED)
-                                    }
-                                )
-                            }
-
-                            item {
-                                VaultHubCategoryCard(
-                                    title = "وسائط العرض لمرة واحدة",
-                                    subtitle = "الصور ومقاطع الفيديو السرية التي فُتحت لمرة واحدة والمحذوفة",
-                                    count = uiState.mediaCount,
-                                    countLabel = "وسائط",
-                                    color = WhatsAppGreenLight,
-                                    icon = Icons.Default.VisibilityOff,
-                                    latestInfo = "حفظ تلقائي عالي الدقة دون علم الطرف الآخر",
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.navigateToSubPage(VaultSubTab.MEDIA)
                                     }
                                 )
                             }
@@ -285,16 +269,6 @@ fun VaultScreen(
                                 }
                                 item {
                                     VaultCategoryTabButton(
-                                        title = "وسائط لمرة واحدة",
-                                        count = uiState.mediaCount,
-                                        icon = Icons.Default.VisibilityOff,
-                                        isSelected = uiState.activeTab == VaultSubTab.MEDIA,
-                                        activeColor = WhatsAppGreenLight,
-                                        onClick = { viewModel.setActiveTab(VaultSubTab.MEDIA) }
-                                    )
-                                }
-                                item {
-                                    VaultCategoryTabButton(
                                         title = "رسائل معدلة",
                                         count = uiState.editedCount,
                                         icon = Icons.Default.Edit,
@@ -340,41 +314,7 @@ fun VaultScreen(
                                             }
                                         )
                                     }
-                                    VaultSubTab.MEDIA -> {
-                                        MediaVaultBentoSection(
-                                            items = uiState.mediaVaultItems,
-                                            onItemClick = { item -> viewModel.selectItem(item) },
-                                            onSaveToGallery = { item ->
-                                                viewModel.saveMediaToGallery(item) { success, msg ->
-                                                    showFeedback(if (success) "تم الحفظ في ألبوم الهاتف" else "تعذر الحفظ: $msg")
-                                                }
-                                            },
-                                            onShare = { item ->
-                                                if (!item.localFilePath.isNullOrBlank()) {
-                                                    try {
-                                                        val file = File(item.localFilePath)
-                                                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
-                                                            context,
-                                                            "${context.packageName}.fileprovider",
-                                                            file
-                                                        )
-                                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                                            type = item.mimeType ?: "image/*"
-                                                            putExtra(Intent.EXTRA_STREAM, contentUri)
-                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                        }
-                                                        context.startActivity(Intent.createChooser(sendIntent, "مشاركة الوسائط"))
-                                                    } catch (_: Exception) {
-                                                        Toast.makeText(context, "تعذر مشاركة الملف", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            },
-                                            onDelete = { id ->
-                                                viewModel.deleteItem(id)
-                                                showFeedback("تم حذف الوسائط من الخزينة")
-                                            }
-                                        )
-                                    }
+
                                     VaultSubTab.EDITED -> {
                                         EditedMessagesBentoSection(
                                             items = uiState.editedMessages,

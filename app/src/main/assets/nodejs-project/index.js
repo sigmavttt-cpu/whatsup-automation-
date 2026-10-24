@@ -22,7 +22,6 @@ import {
     rawMessagesCache,
     msgRetryCounterCache
 } from './config.js';
-import { downloadAndDecryptMedia } from './media-downloader.js';
 import { initBridge, emitToAndroid } from './bridge.js';
 import {
     loadLidPhoneMap,
@@ -418,30 +417,13 @@ export async function startWhatsAppSession(authFolder = currentAuthFolder) {
     });
 
 /**
- * فك التغليف العودي الدقيق للرسائل المركبة (deviceSentMessage, ephemeralMessage, viewOnceMessage, إلخ)
- * وتحديد وسائط العرض لمرة واحدة بشكل موثوق 100%.
+ * فك التغليف للرسائل المركبة (ephemeralMessage, documentWithCaptionMessage, deviceSentMessage)
  */
-function unwrapAndInspectMessage(rawMsg) {
+function unwrapMessage(rawMsg) {
     let current = rawMsg;
-    let isViewOnce = false;
     let depth = 0;
     while (current && depth < 10) {
         depth++;
-        if (current.viewOnceMessage?.message) {
-            isViewOnce = true;
-            current = current.viewOnceMessage.message;
-            continue;
-        }
-        if (current.viewOnceMessageV2?.message) {
-            isViewOnce = true;
-            current = current.viewOnceMessageV2.message;
-            continue;
-        }
-        if (current.viewOnceMessageV2Extension?.message) {
-            isViewOnce = true;
-            current = current.viewOnceMessageV2Extension.message;
-            continue;
-        }
         if (current.ephemeralMessage?.message) {
             current = current.ephemeralMessage.message;
             continue;
@@ -461,17 +443,7 @@ function unwrapAndInspectMessage(rawMsg) {
                       || (typeof normalizeMessageContent === 'function' ? normalizeMessageContent(current) : null)
                       || current;
 
-    if (extracted?.imageMessage?.viewOnce ||
-        extracted?.videoMessage?.viewOnce ||
-        extracted?.audioMessage?.viewOnce ||
-        extracted?.viewOnce ||
-        rawMsg?.imageMessage?.viewOnce ||
-        rawMsg?.videoMessage?.viewOnce ||
-        rawMsg?.audioMessage?.viewOnce) {
-        isViewOnce = true;
-    }
-
-    return { leaf: extracted, isViewOnce };
+    return extracted;
 }
 
     // Messages listener: processes incoming status stories and regular chat messages
@@ -485,15 +457,6 @@ function unwrapAndInspectMessage(rawMsg) {
                 const actualSender = isGroup ? (msg.key?.participant || '') : remoteJid;
                 const cleanRawDigits = actualSender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
 
-                // Cache raw message for PreKey retry decryption requests
-                if (msg.key?.id && msg.message) {
-                    rawMessagesCache.set(msg.key.id, msg.message);
-                    if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
-                        const firstKey = rawMessagesCache.keys().next().value;
-                        rawMessagesCache.delete(firstKey);
-                    }
-                }
-
                 // Status stories
                 if (remoteJid === 'status@broadcast') {
                     if (msg.key?.fromMe || !msg.message) continue;
@@ -501,30 +464,13 @@ function unwrapAndInspectMessage(rawMsg) {
                     continue;
                 }
 
-                // ⚡ النبض التشخيصي الحتمي الفوري: تسجيل وصول الحزمة فوراً لأندرويد قبل أي شروط
-                const hasMessagePayload = !!msg.message;
-                const stubCode = msg.messageStubType ? ` [Stub: ${msg.messageStubType}]` : '';
-                emitToAndroid('VAULT_PROGRESS', {
-                    status: 'MSG_INGEST',
-                    id: msg.key?.id || '',
-                    senderPhone: cleanRawDigits || actualSender,
-                    message: `📩 استلام حزمة من (${cleanRawDigits || actualSender}) [ID: ${msg.key?.id ? msg.key.id.slice(-6) : 'N/A'}] | محتوى: ${hasMessagePayload ? 'جاهز' : 'مشفر/Stub'}${stubCode}`
-                });
+                if (!msg.message) continue;
+                if (msg.key?.fromMe) continue;
 
-                if (!msg.message) {
-                    console.log(`[MSG_STUB] Received empty/stub message from ${actualSender}:`, msg.messageStubType, msg.messageStubParameters);
-                    continue;
-                }
-
-                // 2. فك التغليف العودي واكتشاف وسائط العرض لمرة واحدة بدقة 100%
-                const { leaf, isViewOnce } = unwrapAndInspectMessage(msg.message);
-
-                // السماح برسائل العرض لمرة واحدة حتى لو كانت fromMe لاختبار المستخدم مع نفسه أو الطرف الآخر
-                if (msg.key?.fromMe && !isViewOnce) continue;
-
+                // فك التغليف واستخراج المحتوى الداخلي
+                const leaf = unwrapMessage(msg.message);
                 const contentType = typeof getContentType === 'function' ? getContentType(leaf) : null;
 
-                // 4. استخراج كائن الوسائط مباشرة
                 const mediaObj = leaf?.imageMessage || 
                                  leaf?.videoMessage || 
                                  leaf?.audioMessage || 
@@ -537,177 +483,129 @@ function unwrapAndInspectMessage(rawMsg) {
                 const hasMedia = !!mediaObj || isImage || isVideo || isAudio || isDoc;
 
                 const mediaType = isImage ? 'IMAGE' : (isVideo ? 'VIDEO' : (isAudio ? 'AUDIO' : (isDoc ? 'DOCUMENT' : 'NONE')));
-                const mediaTypeLower = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : (isDoc ? 'document' : 'image')));
-                const ext = isImage ? 'jpg' : (isVideo ? 'mp4' : (isAudio ? 'ogg' : 'bin'));
-                const mime = mediaObj?.mimetype || (isImage ? 'image/jpeg' : (isVideo ? 'video/mp4' : (isAudio ? 'audio/ogg' : 'application/octet-stream')));
 
-                // 🎯 الأولوية الصفرية الفورية: التقاط وفك تشفير وسائط العرض لمرة واحدة دون أي انتظار لحل الـ LID
-                if (hasMedia && mediaObj && isViewOnce) {
-                const vaultDir = path.join(authFolder, '..', 'vault_media');
+                // ربط جهات الاتصال وحل أرقام LID
+                if (msg.key?.senderPn) {
+                    linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
+                }
+                if (msg.key?.participantPn) {
+                    linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
+                }
+
+                let resolved = { phone: cleanRawDigits, realPhone: null, lid: null, isLid: false };
                 try {
-                    if (!fs.existsSync(vaultDir)) fs.mkdirSync(vaultDir, { recursive: true });
-                } catch (eDir) {
-                    console.error('[VAULT] Failed to create vault directory:', eDir);
-                }
-                const filePath = path.join(vaultDir, `viewonce_${msg.key.id}.${ext}`);
+                    resolved = await resolvePhoneAndLid(actualSender, msg, sock);
+                } catch (_) {}
+                const cleanPhone = resolved.realPhone || resolved.phone || cleanRawDigits;
 
-                emitToAndroid('VAULT_PROGRESS', {
-                    status: 'DETECTED',
-                    id: msg.key.id,
-                    senderPhone: cleanRawDigits || actualSender,
-                    mediaType: mediaType,
-                    message: `🔒 تم رصد ${mediaType === 'IMAGE' ? 'صورة' : 'وسائط'} عرض لمرة واحدة من ${cleanRawDigits || actualSender}، جاري فك التشفير والتنزيل...`
-                });
-
-                (async () => {
-                    let buffer = null;
-                    try {
-                        buffer = await downloadAndDecryptMedia(mediaObj, mediaTypeLower, sock, msg);
-                    } catch (e1) {
-                        console.error(`[VAULT] downloadAndDecryptMedia (${mediaTypeLower}) error:`, e1.message);
+                if (msg.pushName && cleanPhone) {
+                    const trimmedPush = msg.pushName.trim();
+                    setContactName(cleanPhone, trimmedPush);
+                    if (resolved.lid) {
+                        setContactName(resolved.lid, trimmedPush);
                     }
-
-                    if (buffer && buffer.length > 0) {
-                        try {
-                            fs.writeFileSync(filePath, buffer);
-                            console.log(`[VAULT] View-Once captured successfully: ${filePath} (${buffer.length} bytes, type=${mediaType})`);
-
-                            rawMessagesCache.set(`media_file_${msg.key.id}`, {
-                                localFilePath: filePath,
-                                mimeType: mime,
-                                fileSizeBytes: buffer.length,
-                                mediaType: mediaType,
-                                originalText: mediaObj?.caption || ''
-                            });
-
-                            const senderDisplay = msg.pushName || getContactName(cleanRawDigits) || cleanRawDigits || actualSender;
-
-                            emitToAndroid('VAULT_MEDIA_CAPTURED', {
-                                id: msg.key.id,
-                                senderPhone: cleanRawDigits || actualSender,
-                                senderName: senderDisplay,
-                                mediaType: mediaType,
-                                isViewOnce: true,
-                                originalText: mediaObj?.caption || '',
-                                localFilePath: filePath,
-                                mimeType: mime,
-                                fileSizeBytes: buffer.length,
-                                timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
-                            });
-
-                            emitToAndroid('VAULT_PROGRESS', {
-                                status: 'SUCCESS',
-                                id: msg.key.id,
-                                senderPhone: cleanRawDigits || actualSender,
-                                mediaType: mediaType,
-                                message: `✅ تم فك تشفير وحفظ ${mediaType === 'IMAGE' ? 'الصورة' : 'الوسائط'} بنجاح في الخزينة (${Math.round(buffer.length / 1024)} KB)`
-                            });
-                        } catch (writeErr) {
-                            console.error('[VAULT] Failed to write vault media file:', writeErr);
-                            emitToAndroid('VAULT_PROGRESS', {
-                                status: 'ERROR',
-                                id: msg.key.id,
-                                senderPhone: cleanRawDigits || actualSender,
-                                message: `فشل كتابة ملف الوسائط على القرص: ${writeErr.message}`
-                            });
-                        }
-                    } else {
-                        console.warn('[VAULT] Failed to download media buffer for:', msg.key.id);
-                        emitToAndroid('VAULT_PROGRESS', {
-                            status: 'ERROR',
-                            id: msg.key.id,
-                            senderPhone: cleanRawDigits || actualSender,
-                            message: `تعذر جلب ملف الوسائط (انتهت صلاحية الرابط من واتساب أو تم رفضه).`
-                        });
-                    }
-                })().catch(topErr => {
-                    console.error('[VAULT] Unhandled error in media capture:', topErr);
-                });
-            }
-
-            // ربط جهات الاتصال وحل أرقام LID بهدوء لباقي العمليات (الرد التلقائي وإشعارات الرسائل)
-            if (msg.key?.senderPn) {
-                linkLidAndPhone(actualSender, msg.key.senderPn, msg.pushName, authFolder);
-            }
-            if (msg.key?.participantPn) {
-                linkLidAndPhone(actualSender, msg.key.participantPn, msg.pushName, authFolder);
-            }
-
-            let resolved = { phone: cleanRawDigits, realPhone: null, lid: null, isLid: false };
-            try {
-                resolved = await resolvePhoneAndLid(actualSender, msg, sock);
-            } catch (_) {}
-            const cleanPhone = resolved.realPhone || resolved.phone || cleanRawDigits;
-
-            if (msg.pushName && cleanPhone) {
-                const trimmedPush = msg.pushName.trim();
-                setContactName(cleanPhone, trimmedPush);
-                if (resolved.lid) {
-                    setContactName(resolved.lid, trimmedPush);
                 }
-            }
 
-            // 2. التقاط إشارة حذف الرسائل لدى الجميع (Anti-Delete Revocation)
-            const protocolMsg = msg.message?.protocolMessage;
-            if (protocolMsg && protocolMsg.type === 0 && protocolMsg.key?.id) {
-                const revokedId = protocolMsg.key.id;
-                const cachedMedia = rawMessagesCache.get(`media_file_${revokedId}`);
-                if (cachedMedia) {
-                    emitToAndroid('VAULT_MEDIA_CAPTURED', {
+                const protocolMsg = msg.message?.protocolMessage;
+
+                // 1. كاشف حذف الرسائل لدى الجميع (Anti-Delete Revocation)
+                if (protocolMsg && protocolMsg.type === 0 && protocolMsg.key?.id) {
+                    const revokedId = protocolMsg.key.id;
+                    const cached = rawMessagesCache.get(revokedId);
+                    const originalText = cached?.text || (typeof cached === 'string' ? cached : '');
+
+                    emitToAndroid('MESSAGE_REVOKED', {
                         id: revokedId,
                         senderPhone: cleanPhone || actualSender,
                         senderName: msg.pushName || getContactName(cleanPhone) || '',
-                        mediaType: cachedMedia.mediaType,
-                        isViewOnce: false,
-                        originalText: cachedMedia.originalText,
-                        localFilePath: cachedMedia.localFilePath,
-                        mimeType: cachedMedia.mimeType,
-                        fileSizeBytes: cachedMedia.fileSizeBytes,
+                        originalText: originalText,
                         timestamp: Date.now()
                     });
+                    continue;
                 }
-                emitToAndroid('MESSAGE_REVOKED', {
-                    id: revokedId,
-                    senderPhone: cleanPhone || actualSender,
-                    timestamp: Date.now()
+
+                // 2. كاشف تعديل الرسائل وحفظ النص السابق (Anti-Edit Message Revision)
+                if (protocolMsg && protocolMsg.type === 14 && protocolMsg.key?.id) {
+                    const editedId = protocolMsg.key.id;
+                    const cached = rawMessagesCache.get(editedId);
+                    const previousText = cached?.text || (typeof cached === 'string' ? cached : 'نص غير مسجل مسبقاً');
+
+                    const editedLeaf = (typeof extractMessageContent === 'function' ? extractMessageContent(protocolMsg.editedMessage) : null) || protocolMsg.editedMessage;
+                    const newText = editedLeaf?.conversation ||
+                                    editedLeaf?.extendedTextMessage?.text ||
+                                    editedLeaf?.imageMessage?.caption ||
+                                    editedLeaf?.videoMessage?.caption || '';
+
+                    if (newText) {
+                        emitToAndroid('MESSAGE_EDITED', {
+                            id: `${editedId}_edit_${Date.now()}`,
+                            originalId: editedId,
+                            senderPhone: cleanPhone || actualSender,
+                            senderName: msg.pushName || getContactName(cleanPhone) || '',
+                            previousText: previousText,
+                            newText: newText,
+                            timestamp: Date.now()
+                        });
+
+                        // تحديث الكاش بالنص الجديد لأي تعديل لاحق
+                        rawMessagesCache.set(editedId, {
+                            text: newText,
+                            senderPhone: cleanPhone || actualSender,
+                            senderName: msg.pushName || getContactName(cleanPhone) || '',
+                            timestamp: Date.now()
+                        });
+                    }
+                    continue;
+                }
+
+                // 3. استخراج نص الرسالة العادية أو وصف الوسائط
+                let text = leaf?.conversation ||
+                           leaf?.extendedTextMessage?.text ||
+                           leaf?.imageMessage?.caption ||
+                           leaf?.videoMessage?.caption ||
+                           leaf?.documentMessage?.caption ||
+                           mediaObj?.caption ||
+                           '';
+
+                if (!text && hasMedia) {
+                    if (isImage) text = '📷 [صورة]';
+                    else if (isVideo) text = '🎥 [فيديو]';
+                    else if (isAudio) text = '🎙️ [رسالة صوتية]';
+                    else if (isDoc) text = '📄 [مستند]';
+                }
+
+                if (!text || !cleanPhone) continue;
+
+                const senderName = msg.pushName || getContactName(cleanPhone) || '';
+
+                // حفظ في الكاش لاسترجاع النص فور الحذف أو التعديل
+                if (msg.key?.id) {
+                    rawMessagesCache.set(msg.key.id, {
+                        text,
+                        senderPhone: cleanPhone,
+                        senderName,
+                        timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
+                    });
+                    if (rawMessagesCache.size > CONFIG.MAX_RAW_MESSAGES) {
+                        const firstKey = rawMessagesCache.keys().next().value;
+                        rawMessagesCache.delete(firstKey);
+                    }
+                }
+
+                emitToAndroid('INCOMING_MESSAGE', {
+                    id: msg.key.id,
+                    senderPhone: cleanPhone,
+                    realPhone: resolved.realPhone,
+                    lid: resolved.lid,
+                    isLid: resolved.isLid,
+                    senderName,
+                    text,
+                    isGroup,
+                    isViewOnce: false,
+                    hasMedia,
+                    mediaType,
+                    timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
                 });
-                continue;
-            }
-
-            // 3. استخراج النص أو وضع نص بديل للوسائط بدون تعليق
-            let text = leaf?.conversation ||
-                       leaf?.extendedTextMessage?.text ||
-                       leaf?.imageMessage?.caption ||
-                       leaf?.videoMessage?.caption ||
-                       leaf?.documentMessage?.caption ||
-                       mediaObj?.caption ||
-                       '';
-
-            if (!text && hasMedia) {
-                if (isImage) text = isViewOnce ? '📷 [صورة عرض لمرة واحدة]' : '📷 [صورة]';
-                else if (isVideo) text = isViewOnce ? '🎥 [فيديو عرض لمرة واحدة]' : '🎥 [فيديو]';
-                else if (isAudio) text = isViewOnce ? '🎙️ [تسجيل صوتي عرض لمرة واحدة]' : '🎙️ [رسالة صوتية]';
-                else if (isDoc) text = '📄 [مستند]';
-            }
-
-            if (!text || !cleanPhone) continue;
-
-            const senderName = msg.pushName || getContactName(cleanPhone) || '';
-
-            emitToAndroid('INCOMING_MESSAGE', {
-                id: msg.key.id,
-                senderPhone: cleanPhone,
-                realPhone: resolved.realPhone,
-                lid: resolved.lid,
-                isLid: resolved.isLid,
-                senderName,
-                text,
-                isGroup,
-                isViewOnce,
-                hasMedia,
-                mediaType,
-                timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
-            });
             } catch (msgErr) {
                 console.error('[MESSAGES_UPSERT] Unexpected error processing message:', msgErr);
             }

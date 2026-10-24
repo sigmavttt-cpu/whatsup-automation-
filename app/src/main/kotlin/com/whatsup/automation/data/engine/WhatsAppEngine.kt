@@ -877,7 +877,7 @@ class WhatsAppEngine @Inject constructor(
                     val senderPhone = data.optString("senderPhone", "")
                     val senderName = data.optString("senderName", "")
                     val mediaTypeStr = data.optString("mediaType", "IMAGE")
-                    val isViewOnce = data.optBoolean("isViewOnce", true)
+                    val isViewOnce = false
                     val originalText = data.optString("originalText")
                     val localFilePath = data.optString("localFilePath")
                     val mimeType = data.optString("mimeType")
@@ -885,7 +885,7 @@ class WhatsAppEngine @Inject constructor(
                     val ts = data.optLong("timestamp", System.currentTimeMillis())
 
                     scope.launch {
-                        val shouldTrack = isViewOnce || sessionKeystore.isPhoneTrackedForVault(senderPhone)
+                        val shouldTrack = sessionKeystore.isPhoneTrackedForVault(senderPhone)
                         if (shouldTrack) {
                             vaultRepository.saveVaultItem(
                                 VaultItem(
@@ -893,8 +893,8 @@ class WhatsAppEngine @Inject constructor(
                                     senderPhone = senderPhone,
                                     senderName = senderName,
                                     mediaType = VaultMediaType.fromString(mediaTypeStr),
-                                    isViewOnce = isViewOnce,
-                                    isDeleted = false,
+                                    isViewOnce = false,
+                                    isDeleted = true,
                                     originalText = originalText,
                                     localFilePath = localFilePath,
                                     mimeType = mimeType,
@@ -902,37 +902,103 @@ class WhatsAppEngine @Inject constructor(
                                     timestamp = ts
                                 )
                             )
-                            logDiagnosticEvent("VAULT", "🔒 تم التقاط وسائط في الخزينة من $senderPhone بنجاح.")
+                            logDiagnosticEvent("VAULT", "🔒 تم التقاط وسائط محذوفة في الخزينة من $senderPhone بنجاح.")
                             try {
-                                val mediaLabel = if (isViewOnce) "صورة/وسائط عرض لمرة واحدة 🔒" else "وسائط دردشة"
                                 val sizeKb = Math.round(fileSizeBytes / 1024.0)
                                 logRepository.insertLog(
                                     ActivityLog(
                                         timestamp = Instant.ofEpochMilli(ts),
                                         senderPhone = senderPhone.ifBlank { "مجهول" },
-                                        messageText = originalText.ifBlank { "[$mediaLabel]" },
-                                        matchedRule = if (isViewOnce) "كاشف العرض لمرة واحدة (Anti-View-Once)" else "حفظ وسائط الخزينة",
+                                        messageText = originalText.ifBlank { "[وسائط محذوفة]" },
+                                        matchedRule = "كاشف وسائط المحذوفات",
                                         actionExecuted = "تم فك التشفير والحفظ بنجاح ($sizeKb KB)",
                                         status = LogStatus.SUCCESS,
                                         extractedName = senderName.ifBlank { null }
                                     )
                                 )
                             } catch (_: Exception) {}
-                        } else {
-                            logDiagnosticEvent("VAULT", "تجاهل حفظ الوسائط من $senderPhone لعدم شمول الرقم بقائمة التتبع المحددة.")
                         }
                     }
                 }
                 "MESSAGE_REVOKED" -> {
                     val revokedId = data.optString("id")
                     val senderPhone = data.optString("senderPhone", "")
+                    val senderName = data.optString("senderName", "")
+                    val originalText = data.optString("originalText", "")
+                    val ts = data.optLong("timestamp", System.currentTimeMillis())
                     scope.launch {
                         if (sessionKeystore.isPhoneTrackedForVault(senderPhone)) {
                             vaultRepository.markMessageAsDeleted(revokedId)
+                            if (originalText.isNotBlank()) {
+                                vaultRepository.saveVaultItem(
+                                    VaultItem(
+                                        id = revokedId,
+                                        senderPhone = senderPhone,
+                                        senderName = senderName,
+                                        mediaType = VaultMediaType.TEXT,
+                                        isViewOnce = false,
+                                        isDeleted = true,
+                                        originalText = originalText,
+                                        timestamp = ts
+                                    )
+                                )
+                            }
                             try {
-                                statusDao.markAsDeleted(revokedId, System.currentTimeMillis())
+                                statusDao.markAsDeleted(revokedId, ts)
                             } catch (_: Exception) {}
-                            logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة/حالة وحفظها في الخزينة: $revokedId ($senderPhone)")
+                            logDiagnosticEvent("ANTI_DELETE", "🗑️ تم اكتشاف حذف رسالة وحفظها في الخزينة: $originalText ($senderPhone)")
+                            try {
+                                logRepository.insertLog(
+                                    ActivityLog(
+                                        timestamp = Instant.ofEpochMilli(ts),
+                                        senderPhone = senderPhone.ifBlank { "مجهول" },
+                                        messageText = originalText.ifBlank { "[رسالة محذوفة لدى الجميع]" },
+                                        matchedRule = "كاشف الحذف (Anti-Delete)",
+                                        actionExecuted = "تم توثيق وحفظ الرسالة المحذوفة",
+                                        status = LogStatus.SUCCESS,
+                                        extractedName = senderName.ifBlank { null }
+                                    )
+                                )
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+                "MESSAGE_EDITED" -> {
+                    val editId = data.optString("id")
+                    val senderPhone = data.optString("senderPhone", "")
+                    val senderName = data.optString("senderName", "")
+                    val previousText = data.optString("previousText", "")
+                    val newText = data.optString("newText", "")
+                    val ts = data.optLong("timestamp", System.currentTimeMillis())
+                    scope.launch {
+                        if (sessionKeystore.isPhoneTrackedForVault(senderPhone)) {
+                            val combinedText = "✏️ النص السابق: $previousText\n⬅️ النص المعدل: $newText"
+                            vaultRepository.saveVaultItem(
+                                VaultItem(
+                                    id = editId,
+                                    senderPhone = senderPhone,
+                                    senderName = senderName,
+                                    mediaType = VaultMediaType.TEXT,
+                                    isViewOnce = false,
+                                    isDeleted = false,
+                                    originalText = combinedText,
+                                    timestamp = ts
+                                )
+                            )
+                            logDiagnosticEvent("ANTI_EDIT", "✏️ رصد تعديل رسالة من $senderPhone: \"$previousText\" ⬅️ \"$newText\"")
+                            try {
+                                logRepository.insertLog(
+                                    ActivityLog(
+                                        timestamp = Instant.ofEpochMilli(ts),
+                                        senderPhone = senderPhone.ifBlank { "مجهول" },
+                                        messageText = "الأصل: $previousText | الجديد: $newText",
+                                        matchedRule = "كاشف تعديل الرسائل (Anti-Edit)",
+                                        actionExecuted = "تم حفظ النص السابق قبل التعديل",
+                                        status = LogStatus.SUCCESS,
+                                        extractedName = senderName.ifBlank { null }
+                                    )
+                                )
+                            } catch (_: Exception) {}
                         }
                     }
                 }
