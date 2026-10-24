@@ -272,7 +272,6 @@ fun VaultSubPageHeader(
     val (title, subtitle, color) = when (activeTab) {
         VaultSubTab.TEXTS -> Triple("النصوص المحذوفة لدى الجميع", "الرسائل النصية التي قام الطرف الآخر بحذفها", Color(0xFFFF4D4D))
         VaultSubTab.EDITED -> Triple("رسائل تم تعديلها وحفظ النص السابق", "كشف النص الأصلي المخفي ومقارنته بالمعدل", AmberWarning)
-        VaultSubTab.AUDIO -> Triple("الملاحظات الصوتية المحذوفة", "البصمات والتسجيلات الصوتية المسحوبة من الطرفين", CyberCyan)
     }
 
     Row(

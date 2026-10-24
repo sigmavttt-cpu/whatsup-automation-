@@ -1,6 +1,5 @@
 package com.whatsup.automation.presentation.screens.vault
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -28,7 +27,6 @@ import com.whatsup.automation.presentation.components.BentoSkeletonList
 import com.whatsup.automation.presentation.screens.vault.components.*
 import com.whatsup.automation.presentation.theme.*
 import kotlinx.coroutines.launch
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -185,22 +183,6 @@ fun VaultScreen(
                                     }
                                 )
                             }
-
-                            item {
-                                VaultHubCategoryCard(
-                                    title = "التسجيلات الصوتية المحذوفة",
-                                    subtitle = "البصمات والملاحظات الصوتية المسحوبة من الطرفين",
-                                    count = uiState.audioCount,
-                                    countLabel = "تسجيل",
-                                    color = CyberCyan,
-                                    icon = Icons.Default.Mic,
-                                    latestInfo = "استماع وتصدير التسجيلات حتى بعد حذفها لدى الجميع",
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.navigateToSubPage(VaultSubTab.AUDIO)
-                                    }
-                                )
-                            }
                         }
                     }
                 } else {
@@ -277,16 +259,6 @@ fun VaultScreen(
                                         onClick = { viewModel.setActiveTab(VaultSubTab.EDITED) }
                                     )
                                 }
-                                item {
-                                    VaultCategoryTabButton(
-                                        title = "تسجيلات صوتية",
-                                        count = uiState.audioCount,
-                                        icon = Icons.Default.Mic,
-                                        isSelected = uiState.activeTab == VaultSubTab.AUDIO,
-                                        activeColor = CyberCyan,
-                                        onClick = { viewModel.setActiveTab(VaultSubTab.AUDIO) }
-                                    )
-                                }
                             }
                         }
 
@@ -328,35 +300,6 @@ fun VaultScreen(
                                             },
                                             onOpenUserHistory = { phone, name ->
                                                 viewModel.openUserHistory(phone, name)
-                                            }
-                                        )
-                                    }
-                                    VaultSubTab.AUDIO -> {
-                                        AudioVaultBentoSection(
-                                            items = uiState.audioVaultItems,
-                                            onDelete = { id ->
-                                                viewModel.deleteItem(id)
-                                                showFeedback("تم حذف التسجيل من الخزينة")
-                                            },
-                                            onShare = { item ->
-                                                if (!item.localFilePath.isNullOrBlank()) {
-                                                    try {
-                                                        val file = File(item.localFilePath)
-                                                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
-                                                            context,
-                                                            "${context.packageName}.fileprovider",
-                                                            file
-                                                        )
-                                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                                            type = item.mimeType ?: "audio/*"
-                                                            putExtra(Intent.EXTRA_STREAM, contentUri)
-                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                        }
-                                                        context.startActivity(Intent.createChooser(sendIntent, "مشاركة الملاحظة الصوتية"))
-                                                    } catch (_: Exception) {
-                                                        Toast.makeText(context, "تعذر مشاركة الملف", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
                                             }
                                         )
                                     }

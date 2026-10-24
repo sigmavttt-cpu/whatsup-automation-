@@ -37,8 +37,7 @@ enum class VaultViewMode {
  */
 enum class VaultSubTab {
     TEXTS,       // 1. نصوص محذوفة (أحمر)
-    EDITED,      // 2. رسائل تم تعديلها وحفظ النص السابق (كهرماني/أصفر)
-    AUDIO        // 3. ملاحظات وتسجيلات صوتية محذوفة (سيان)
+    EDITED       // 2. رسائل تم تعديلها وحفظ النص السابق (كهرماني/أصفر)
 }
 
 /**
@@ -51,9 +50,6 @@ data class VaultUiState(
     val items: List<VaultItem> = emptyList(),
     val deletedTexts: List<VaultItem> = emptyList(),
     val editedMessages: List<VaultItem> = emptyList(),
-    val mediaVaultItems: List<VaultItem> = emptyList(),
-    val audioVaultItems: List<VaultItem> = emptyList(),
-    val otherVaultItems: List<VaultItem> = emptyList(),
     val deletedCount: Int = 0,
     val isLoading: Boolean = false,
     val selectedItem: VaultItem? = null,
@@ -66,9 +62,6 @@ data class VaultUiState(
 ) {
     val deletedTextCount: Int get() = deletedTexts.size
     val editedCount: Int get() = editedMessages.size
-    val mediaCount: Int get() = mediaVaultItems.size
-    val audioCount: Int get() = audioVaultItems.size
-    val otherCount: Int get() = otherVaultItems.size
 }
 
 /**
@@ -138,36 +131,9 @@ class VaultViewModel @Inject constructor(
             matchesQuery(it)
         }
 
-        // 3. وسائط: الصور ومقاطع الفيديو (العرض لمرة واحدة أو المحذوفة)
-        val mediaList = allItems.filter {
-            (it.mediaType in listOf(VaultMediaType.IMAGE, VaultMediaType.VIDEO)) &&
-            (it.isViewOnce || it.isDeleted) &&
-            matchesQuery(it)
-        }
-
-        // 4. صوتيات: الملاحظات والتسجيلات الصوتية (العرض لمرة واحدة أو المحذوفة)
-        val audioList = allItems.filter {
-            it.mediaType == VaultMediaType.AUDIO &&
-            (it.isViewOnce || it.isDeleted) &&
-            matchesQuery(it)
-        }
-
-        // 5. لمرة واحدة: وسائط العرض لمرة واحدة المحفوظة
-        val viewOnceList = allItems.filter {
-            it.isViewOnce &&
-            matchesQuery(it)
-        }
-
-        // 6. ملفات ومستندات أخرى
-        val otherList = allItems.filter {
-            (it.mediaType == VaultMediaType.DOCUMENT || (it.mediaType !in listOf(VaultMediaType.TEXT, VaultMediaType.IMAGE, VaultMediaType.VIDEO, VaultMediaType.AUDIO))) &&
-            matchesQuery(it)
-        }
-
         val activeList = when (tab) {
             VaultSubTab.TEXTS -> textsList
             VaultSubTab.EDITED -> editedList
-            VaultSubTab.AUDIO -> audioList
         }
 
         val userHistory = if (inspected != null) {
@@ -183,9 +149,6 @@ class VaultViewModel @Inject constructor(
             items = activeList,
             deletedTexts = textsList,
             editedMessages = editedList,
-            mediaVaultItems = mediaList,
-            audioVaultItems = audioList,
-            otherVaultItems = otherList,
             deletedCount = delCount,
             isLoading = false,
             selectedItem = _selectedItem.value,
